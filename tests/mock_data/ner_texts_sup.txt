@@ -1,0 +1,2 @@
+This is a Piece of text of the domain. It can span multiple sentences.
+This is another Piece.

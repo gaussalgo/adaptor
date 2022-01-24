@@ -1,0 +1,1 @@
+This is a piece of text to translate. It can span multiple sentences.

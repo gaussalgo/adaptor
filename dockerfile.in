@@ -1,0 +1,6 @@
+# this is an example dockerfile, that can be used for a quick resolution of gpu-supporting env
+FROM pytorch/pytorch:latest
+
+CMD apt update && apt install -y git
+CMD git clone <this repo>.git && cd adaptor && python3.8 -m pip install -e .
+# DPP training: chmod 777 /dev/shm && chmod 777 /dev/shm/*
