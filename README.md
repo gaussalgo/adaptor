@@ -24,7 +24,7 @@ In conventional adaptation, the objectives are applied *sequentially* (that's wh
 but they might as well be applied in a combilation (`ParallelSchedule`), or balanced dynamically, 
 e.g. according to its objectives` losses.
 
-![Adaptation scheme](docs/user_flow.png)
+![Adaptation scheme](https://github.com/gaussalgo/adaptor/raw/477b88d41d5d5fe1a172e4b115d18cf0619d15d2/docs/user_flow.png)
 
 In the `Adaptor` framework, instead of providing the `Trainer` with a model encoded dataset both compatible
 with specific training task,
@@ -54,16 +54,21 @@ Built upon the well-established and maintained 🤗 Transformers library, Adapto
 future new NLP models out-of-box. The adaptation of Adaptor to a different version of Hugging Face Transformers library 
 should not take longer than a few minutes.
 
-### How to use this:
+### How to use Adaptor
 
-First, install the library. If you clone it, you can also use the provided example scripts.
+First, install the library: 
+```shell
+pip install adaptor
+```
+
+If you clone it, you can also run and modify the provided example scripts.
 ```shell
 git clone {this repo}
 cd adaptor
 python -m pip install -e .
 ```
 
-You can find and run the full examples from below in `tests/end2end_usecases_test.py` folder.
+You can also find and run the examples from below running in `tests/end2end_usecases_test.py`.
 
 #### Adapted Named Entity Recognition
 
@@ -155,7 +160,7 @@ print(output_text)
 
 but contributions are welcome :) (see *How can you contribute* below)
 
-### Why are we doing this?
+### Motivation for objective-centric training
 
 We've seen that transformers can outstandingly perform on relatively complicated tasks, which makes us 
 think that experimenting with custom objectives can also improve their desperately-needed
