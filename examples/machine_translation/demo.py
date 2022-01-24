@@ -1,10 +1,12 @@
 """
-Example script Machine Translation adaptation
-We train a NMT model on Wikipedia parallel corpus while adapting it to OpenSubtitles domain.
+This script demonstrates configurations of Machine Translation adaptation experiments,
+that we performed for our ACL demo paper.
 
-We perform the following steps:
-1. Load datasets: once available, this can be rewritten for HF Datasets library
-2. Perform a combined adaptation on both parallel data and monolingual, OpenSubtitles domain using ParallelSchedule.
+We permute the following parameters:
+1. *Objectives*: we permute the training objectives amonf the ones initialised below.
+2. *Schedules*: We experiment with both Sequential and Parallel Schedule
+3. Pre-training vs. fine-tuning: additionally to fine-tuning, we increase Learning rate to 2e-4 and re-initialize the model
+
 """
 import comet_ml  # logging hook must be imported before torch
 
@@ -13,6 +15,7 @@ from adaptor.adapter import Adapter
 from adaptor.evaluators.generative import BLEU, ROUGE, BERTScore
 from adaptor.lang_module import LangModule
 from adaptor.objectives.backtranslation import BackTranslation, BackTranslator
+from adaptor.objectives.denoising import DenoisingObjective
 from adaptor.objectives.seq2seq import Sequence2Sequence
 from adaptor.schedules import ParallelSchedule
 from adaptor.utils import AdaptationArguments, StoppingStrategy
@@ -20,7 +23,7 @@ from adaptor.utils import AdaptationArguments, StoppingStrategy
 from examples.data_utils_opus import OPUSDataset
 
 data_dir = "data_dir"
-experiment_id = "experiment_2.4"
+experiment_id = "experiment_9"
 
 adapt_dataset = "OpenSubtitles"
 test_datasets = ["wikimedia", "OpenSubtitles", "Bible"]
@@ -45,13 +48,13 @@ bible_val_pairs = OPUSDataset("Bible", "val", src_lang, tgt_lang, data_dir=data_
 # 2. Initialize training arguments
 # We apply NUM_STEPS stopping strategy in cases where at least one of the objectives does not converge in max_steps
 training_arguments = AdaptationArguments(output_dir=experiment_id,
-                                         learning_rate=2e-5,
-                                         max_steps=100000,
+                                         learning_rate=2e-5,  # we set LR=2e-4 for pre-training experiments
                                          stopping_strategy=StoppingStrategy.ALL_OBJECTIVES_CONVERGED,
                                          # stopping_strategy=StoppingStrategy.NUM_STEPS_ALL_OBJECTIVES,
                                          do_train=True,
                                          do_eval=True,
                                          warmup_steps=10000,
+                                         max_steps=100000,
                                          gradient_accumulation_steps=10,
                                          logging_steps=100,
                                          eval_steps=1000,
@@ -59,6 +62,7 @@ training_arguments = AdaptationArguments(output_dir=experiment_id,
                                          num_train_epochs=30,
                                          evaluation_strategy="steps",
                                          also_log_converged_objectives=True)
+
 # we initialise base model from HF model
 lang_module = LangModule("Helsinki-NLP/opus-mt-en-cs")
 
@@ -66,7 +70,7 @@ metrics_args = {"additional_sep_char": "▁"}
 
 val_metrics = [BLEU(**metrics_args, decides_convergence=True), ROUGE(**metrics_args), BERTScore(**metrics_args)]
 
-# training objectives
+# declaration of *all* used objectives: both training and evaluation ones (see configurations below)
 seq_wiki = Sequence2Sequence(lang_module,
                              texts_or_path=wiki_pairs.source,
                              labels_or_path=wiki_pairs.target,
@@ -86,7 +90,13 @@ opensub_back = BackTranslation(lang_module,
                                share_other_objective_head=seq_wiki,
                                objective_id="Opensub")
 
-# evaluation objectives are used for model robustness evaluation
+opensub_denoising = DenoisingObjective(lang_module,
+                                       texts_or_path=opensub_pairs.target,
+                                       val_texts_or_path=opensub_val_pairs.target,
+                                       batch_size=8,
+                                       share_other_objective_head=seq_wiki,
+                                       val_evaluators=val_metrics)
+
 seq_opensub = Sequence2Sequence(lang_module,
                                 texts_or_path=opensub_pairs.source,
                                 labels_or_path=opensub_pairs.target,
@@ -111,18 +121,34 @@ seq_bible = Sequence2Sequence(lang_module,
                               share_other_objective_head=seq_wiki,
                               objective_id="Bible")
 
+# in our experiments we permute these configurations of training and evaluation-only objectives:
+
+# training_objectives, eval_objectives = [seq_wiki], [seq_opensub, seq_bible]
+# training_objectives, eval_objectives = [opensub_back], [seq_wiki, seq_opensub, seq_bible]
+# training_objectives, eval_objectives = [seq_wiki, opensub_denoising], [seq_opensub, seq_bible]
+training_objectives, eval_objectives = [seq_wiki, opensub_back], [seq_opensub, seq_bible]
+# training_objectives, eval_objectives = [seq_wiki, seq_opensub], [seq_bible]
+
 schedule = ParallelSchedule(objectives=[opensub_back, seq_wiki],
                             extra_eval_objectives=[seq_opensub, seq_bible],
                             args=training_arguments)
-# for training from scratch:
+
+# SequentialSchedule initialization looks exactly the same:
+# schedule = SequentialSchedule(objectives=[opensub_back, seq_wiki],
+#                               extra_eval_objectives=[seq_opensub, seq_bible],
+#                               args=training_arguments)
+
+# for training from scratch, we use LangModule.reinitialize() after the initialization of all training Objectives
 # lang_module.reinitialize()
 
 adapter = Adapter(lang_module, schedule, args=training_arguments)
+# train() starts the training process
 adapter.train()
 
 adapter.save_model(experiment_id)
 print("Adaptation finished. Trained model for each head can be reloaded from path: `%s`" % experiment_id)
 
+# we evaluate trained model right after the training to report the results to experiment's log
 print("Starting evaluation")
 
 test_device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -130,7 +156,6 @@ test_device = "cuda" if torch.cuda.is_available() else "cpu"
 translator_model = lang_module.trainable_models[str(id(seq_wiki))]
 metric = BLEU(use_generate=True, additional_sep_char="▁", progress_bar=False)
 
-# evaluation is performed right at the end of the training
 for test_dataset_id in test_datasets:
     test_source = OPUSDataset(test_dataset_id, "test", src_lang, tgt_lang, data_dir=tmp_data_dir, firstn=test_firstn)
 
