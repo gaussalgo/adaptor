@@ -22,7 +22,7 @@ from adaptor.utils import AdaptationArguments, StoppingStrategy
 
 from examples.data_utils_opus import OPUSDataset
 
-data_dir = "data_dir"
+data_dir = "examples/machine_translation"
 experiment_id = "experiment_9"
 
 adapt_dataset = "OpenSubtitles"
@@ -49,8 +49,8 @@ bible_val_pairs = OPUSDataset("Bible", "val", src_lang, tgt_lang, data_dir=data_
 # We apply NUM_STEPS stopping strategy in cases where at least one of the objectives does not converge in max_steps
 training_arguments = AdaptationArguments(output_dir=experiment_id,
                                          learning_rate=2e-5,  # we set LR=2e-4 for pre-training experiments
-                                         stopping_strategy=StoppingStrategy.ALL_OBJECTIVES_CONVERGED,
-                                         # stopping_strategy=StoppingStrategy.NUM_STEPS_ALL_OBJECTIVES,
+                                         # stopping_strategy=StoppingStrategy.ALL_OBJECTIVES_CONVERGED,
+                                         stopping_strategy=StoppingStrategy.NUM_STEPS_ALL_OBJECTIVES,
                                          do_train=True,
                                          do_eval=True,
                                          warmup_steps=10000,
@@ -157,12 +157,12 @@ translator_model = lang_module.trainable_models[str(id(seq_wiki))]
 metric = BLEU(use_generate=True, additional_sep_char="▁", progress_bar=False)
 
 for test_dataset_id in test_datasets:
-    test_source = OPUSDataset(test_dataset_id, "test", src_lang, tgt_lang, data_dir=tmp_data_dir, firstn=test_firstn)
+    test_source = OPUSDataset(test_dataset_id, "test", src_lang, tgt_lang, data_dir=data_dir, firstn=test_firstn)
 
     references = []
     hypotheses = []
     for src_text, ref_text in zip(test_source.source, test_source.target):
-        referencess.append(ref_text)
+        references.append(ref_text)
         inputs = lang_module.tokenizer(src_text, truncation=True, return_tensors="pt").to(test_device)
 
         outputs = translator_model.generate(**inputs)
