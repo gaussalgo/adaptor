@@ -28,11 +28,11 @@ def test_ner_adaptation():
     lang_module = LangModule(test_base_models["token_classification"])
     objectives = [
             MaskedLanguageModeling(lang_module,
-                                   texts_or_path=paths["texts"]["target_domain"]["unsup"],
+                                   texts_or_path=paths["texts"]["unsup"],
                                    batch_size=1),
             TokenClassification(lang_module,
-                                texts_or_path=paths["texts"]["target_domain"]["ner"],
-                                labels_or_path=paths["labels"]["target_domain"]["ner"],
+                                texts_or_path=paths["texts"]["ner"],
+                                labels_or_path=paths["labels"]["ner"],
                                 batch_size=1)
     ]
 
@@ -47,11 +47,11 @@ def test_mt_adaptation():
     lang_module = LangModule(test_base_models["translation"])
     objectives = [
             DenoisingObjective(lang_module,
-                               texts_or_path=paths["texts"]["target_domain"]["unsup"],
+                               texts_or_path=paths["texts"]["unsup"],
                                batch_size=1),
             Sequence2Sequence(lang_module,
-                              texts_or_path=paths["texts"]["target_domain"]["translation"],
-                              labels_or_path=paths["labels"]["target_domain"]["translation"],
+                              texts_or_path=paths["texts"]["translation"],
+                              labels_or_path=paths["labels"]["translation"],
                               batch_size=1,
                               source_lang_id="en",
                               target_lang_id="cs")

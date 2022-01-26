@@ -18,8 +18,8 @@ class TokenClassification(SupervisedObjective):
         Performs batching and collation and return resulting encodings.
         :param texts: Sentence-level input texts.
         :param labels: Sentence-level input labels, aligned with input words by spaces.
-        For an example of expected inputs, see tests/mock_data/ner_texts_sup.txt
-        and texts/mock_data/ner_texts_sup_labels.txt
+        For an example of expected inputs, see tests/mock_data/supervised_texts.txt
+        and texts/mock_data/supervised_texts_token_labels.txt
 
         :return: Aligned encodings.
         """

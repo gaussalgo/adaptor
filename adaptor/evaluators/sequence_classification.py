@@ -1,25 +1,32 @@
-from typing import List, Optional, Dict, Union
+from typing import List
 
 import torch
-from transformers import PreTrainedTokenizer, BatchEncoding
+from transformers import PreTrainedTokenizer
 
-from adaptor.evaluators.evaluator_base import EvaluatorBase
-from adaptor.utils import Head
+from .evaluator_base import EvaluatorBase
+from ..utils import Head, AdaptationDataset
 
 
 class Accuracy(EvaluatorBase):
+    """
+    Sequence classification accuracy, where each input sample of dataset falls into a single category.
+    """
 
-    compatible_head: Head = Head.SEQ_CLASSIFICATION
+    compatible_heads: List[Head] = [Head.SEQ_CLASSIFICATION]
     smaller_is_better: bool = False
 
-    def __call__(self,
-                 inputs: Optional[List[Union[Dict[str, torch.LongTensor], BatchEncoding]]] = None,
-                 model: Optional[torch.nn.Module] = None,
-                 logit_outputs: Optional[List[torch.FloatTensor]] = None,
-                 labels: Optional[List[torch.LongTensor]] = None,
-                 tokenizer: Optional[PreTrainedTokenizer] = None):
-        labels_all = torch.hstack(labels)
-        assert labels_all.dim() == 1, "%s evaluator does not support evaluation of multinomial classification." % self
+    def __call__(self, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, dataset: AdaptationDataset) -> float:
+        """
+        Refer to the superclass documentation.
+        """
+        expected = []
+        actual = []
 
-        num_correct = sum(torch.vstack(logit_outputs).argmax(-1) == labels_all)
-        return (num_correct / len(labels_all)).item()
+        for batch in dataset:
+            expected.extend(batch["labels"])
+            actual.extend(model(**batch).argmax(-1))
+
+        assert len(expected) == len(actual)
+
+        num_correct = sum([exp == act for exp, act in zip(expected, actual)])
+        return num_correct / len(expected)

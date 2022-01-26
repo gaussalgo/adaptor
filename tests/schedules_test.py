@@ -8,8 +8,8 @@ from adaptor.utils import AdaptationArguments, StoppingStrategy
 from utils import test_base_models
 
 unsup_target_domain_texts = "mock_data/domain_unsup.txt"
-sup_target_domain_texts = "mock_data/ner_texts_sup.txt"
-sup_target_domain_labels = "mock_data/ner_texts_sup_labels.txt"
+sup_target_domain_texts = "mock_data/supervised_texts.txt"
+sup_target_domain_labels = "mock_data/supervised_texts_token_labels.txt"
 
 sup_translation_texts_src = "mock_data/seq2seq_sources.txt"
 sup_translation_texts_tgt = "mock_data/seq2seq_targets.txt"

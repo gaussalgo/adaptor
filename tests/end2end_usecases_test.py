@@ -10,9 +10,9 @@ from adaptor.objectives.seq2seq import Sequence2Sequence
 from adaptor.schedules import ParallelSchedule
 from utils import training_arguments, paths, test_base_models
 
-unsup_target_domain_texts = paths["texts"]["target_domain"]["unsup"]
-sup_target_domain_texts = paths["texts"]["target_domain"]["ner"]
-sup_target_domain_labels = paths["labels"]["target_domain"]["ner"]
+unsup_target_domain_texts = paths["texts"]["unsup"]
+sup_target_domain_texts = paths["texts"]["ner"]
+sup_target_domain_labels = paths["labels"]["ner"]
 
 
 def test_adaptation_ner():
@@ -23,11 +23,11 @@ def test_adaptation_ner():
     # Objectives take either List[str] for in-memory iteration, or a source file path for streamed iteration
     objectives = [MaskedLanguageModeling(lang_module,
                                          batch_size=1,
-                                         texts_or_path=paths["texts"]["target_domain"]["unsup"]),
+                                         texts_or_path=paths["texts"]["unsup"]),
                   TokenClassification(lang_module,
                                       batch_size=1,
-                                      texts_or_path=paths["texts"]["target_domain"]["ner"],
-                                      labels_or_path=paths["labels"]["target_domain"]["ner"])]
+                                      texts_or_path=paths["texts"]["ner"],
+                                      labels_or_path=paths["labels"]["ner"])]
 
     # 4. pick a schedule of the selected objectives
     schedule = ParallelSchedule(objectives, training_arguments)
@@ -61,11 +61,11 @@ def test_adaptation_translation():
     objectives = [BackTranslation(lang_module,
                                   back_translator=BackTranslator("Helsinki-NLP/opus-mt-cs-en"),
                                   batch_size=1,
-                                  texts_or_path=paths["texts"]["target_domain"]["unsup"]),
+                                  texts_or_path=paths["texts"]["unsup"]),
                   Sequence2Sequence(lang_module, batch_size=1,
-                                    texts_or_path=paths["texts"]["target_domain"]["translation"],
+                                    texts_or_path=paths["texts"]["translation"],
                                     val_evaluators=seq2seq_evaluators,
-                                    labels_or_path=paths["labels"]["target_domain"]["translation"],
+                                    labels_or_path=paths["labels"]["translation"],
                                     source_lang_id="en", target_lang_id="cs")]
     # 3. pick a schedule of the selected objectives
     # this one will shuffle the batches of both objectives

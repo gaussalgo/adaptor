@@ -1,27 +1,32 @@
 import abc
-from typing import List, Optional, Dict, Union
+from typing import List
 
 import torch
-from transformers import PreTrainedTokenizer, BatchEncoding
+from transformers import PreTrainedTokenizer
 
-from adaptor.utils import Head
+from adaptor.utils import Head, AdaptationDataset
 
 
 class EvaluatorBase(abc.ABC):
+    """
+    Base class of all evaluators, usable by the instances of Objectives.
+    Subclass and implement this interface to create new evaluators.
+    """
 
-    compatible_head: Head
+    compatible_heads: List[Head]
     smaller_is_better: bool
 
     def __init__(self, decides_convergence: bool = False):
         self.determines_convergence = decides_convergence
 
     @abc.abstractmethod
-    def __call__(self,
-                 inputs: Optional[List[Union[Dict[str, torch.LongTensor], BatchEncoding]]] = None,
-                 model: Optional[torch.nn.Module] = None,
-                 logit_outputs: Optional[List[torch.FloatTensor]] = None,
-                 labels: Optional[List[torch.LongTensor]] = None,
-                 tokenizer: Optional[PreTrainedTokenizer] = None):
+    def __call__(self, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, dataset: AdaptationDataset) -> float:
+        """
+        Evaluation of this instance
+        :param tokenizer:
+        :param model:
+        :param dataset:
+        """
         pass
 
     def __str__(self) -> str:
