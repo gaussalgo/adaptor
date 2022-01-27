@@ -164,3 +164,29 @@ class METEOR(GenerativeEvaluator):
             meteor_score([list(expected)], actual, alpha=parameters[0], beta=parameters[1], gamma=parameters[2])
             for expected, actual in zip(expected_list_tokenized, actual_list_tokenized)]
         return float(sum(all_scores) / len(all_scores))
+
+class JS_DIVERGENCE(GenerativeEvaluator):
+    def KL_divergence(self, p: List[float], q: List[float]) ->float:
+        return sum([p_i * np.log2((p_i) / (q_i))  for p_i,q_i in zip(p,q) if q_i !=0])
+
+    def JS_divergence(self, probs_real: List[float], probs_model: List[float], base:Optional[float] = 2) -> float:
+            if base is not None and base <= 0:
+                raise ValueError("`base` must be a positive number or `None`.")
+            probs_joined = [(prob_r +prob_m)/2 for prob_r,prob_m in zip(probs_real,probs_model)]
+            return (self.KL_divergence(probs_real,probs_joined) + self.KL_divergence(probs_model,probs_joined))/(2*np.log2(base))
+
+
+    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str], use_metric: Optional[GenerativeEvaluator] = PRISM(use_cuda = False, language="en", probability=True)) -> float:
+            if len(expected_list) != len(actual_list):
+                raise ValueError("Lists for evaluation are not the same size!")
+            _probs_real = [use_metric.evaluate_str([expected],[expected]) for expected in expected_list]
+            _probs_model = [use_metric.evaluate_str([expected],[actual]) for expected,actual in zip(expected_list,actual_list)]
+            is_prob:bool=all(prob >=0 and prob <=1 for prob in _probs_model) and all(prob >=0 and prob <=1 for prob in _probs_real)
+            is_percentage:bool = all(prob >=0 and prob <=100 for prob in _probs_model) and all(prob >=0 and prob <=100 for prob in _probs_real) and not is_prob
+            if is_prob:
+                divergence = self.JS_divergence(_probs_real,_probs_model,base=2)
+            elif is_percentage:
+                divergence = self.JS_divergence([prob*0.01 for prob in _probs_real],[prob*0.01 for prob in _probs_model],base=2)
+            else:
+               raise ValueError("Evaluator %s can only be used with evaluators returning probabilities or percentages.") 
+            return divergence
