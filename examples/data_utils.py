@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 
 class DataSplit(Enum):
@@ -18,7 +18,7 @@ class SplitOffset(Enum):
 
 
 class DataSource(ABC):
-    dataset_id: str = None
+    dataset_id: Optional[str] = None
 
     @abstractmethod
     def __init__(self,  split: str, data_dir: str):

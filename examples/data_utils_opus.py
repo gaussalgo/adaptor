@@ -62,7 +62,7 @@ class OPUSDataset(DataSource):
             logger.warning("Dropping %s duplicates from %s %s split." % (duplicates, self.domain_label, self.split))
         return out_src_texts, out_tgt_texts
 
-    def _load_translation_pairs(self, firstn: int) -> Tuple[List[str], List[str]]:
+    def _load_translation_pairs(self, firstn: Optional[int] = None) -> Tuple[List[str], List[str]]:
         src_file, tgt_file = self._maybe_download_unzip()
         with open(src_file, "r") as f:
             src_lines = [self._preproc(line) for line in f.readlines()]

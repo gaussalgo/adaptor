@@ -227,7 +227,7 @@ class Prism:
         return scores
 
 
-def parse_sacrebleu_uri(uri: str) -> Tuple[str]:
+def parse_sacrebleu_uri(uri: str) -> Tuple[str, str]:
     """
     Parses the test set and language pair from a URI of the form
 

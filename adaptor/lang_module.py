@@ -38,7 +38,7 @@ class LangModule(torch.nn.Module):
     @staticmethod
     def load_head(model_name_or_path: str,
                   head_type: Head,
-                  head_kwargs: Optional[Dict[str, Any]] = None) -> torch.nn.Module:
+                  head_kwargs: Dict[str, Any]) -> torch.nn.Module:
         """
         Returns transformers model with a head of the requested type.
         :param model_name_or_path: base model identifier
