@@ -1,6 +1,7 @@
 # Adapt𝒪r: Objective-centric Adaptation library
 
 [![Tests](https://github.com/gaussalgo/adaptor/actions/workflows/test.yml/badge.svg)](https://github.com/gaussalgo/adaptor/actions)
+[![PyPI version](https://badge.fury.io/py/adaptor.svg)](https://badge.fury.io/py/adaptor)
 
 Adaptor can help you to easily adapt a language model to your own data domain, task,
 or custom research objective(s).
