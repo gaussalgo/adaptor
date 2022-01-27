@@ -45,5 +45,6 @@ jobs:
           python -V
           pip install -U pip
           pip install -e .
+          pip install pytest
       - name: Unit tests
-        run: pytype tests
+        run: pytest tests
