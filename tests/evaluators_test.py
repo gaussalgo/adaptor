@@ -1,4 +1,4 @@
-from adaptor.evaluators.generative import BLEU, GenerativeEvaluator, ROUGE, BERTScore, PRISM, METEOR
+from adaptor.evaluators.generative import BLEU, JS_DIVERGENCE, GenerativeEvaluator, ROUGE, BERTScore, PRISM, METEOR
 from adaptor.lang_module import LangModule
 from adaptor.objectives.objective_base import Objective
 from adaptor.objectives.seq2seq import Sequence2Sequence
@@ -56,6 +56,8 @@ def test_bertscore():
 def test_prism():
     assert_gen_evaluator_logs(PRISM(use_cuda=False, language="en", decides_convergence=True), "train")
 
-
 def test_meteor():
     assert_gen_evaluator_logs(METEOR(decides_convergence=True), "train")
+
+def test_divergence():
+    assert_gen_evaluator_logs(JS_DIVERGENCE(decides_convergence=True), "train")
