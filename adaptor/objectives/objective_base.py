@@ -416,11 +416,11 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
             if self.labels is not None:
                 all_labels = self.labels
             else:
-                all_labels = [l.strip() for l in AdaptationDataset.iter_text_file_per_line(self.labels_path)]
+                all_labels = [line.strip() for line in AdaptationDataset.iter_text_file_per_line(self.labels_path)]
             if self.val_labels is not None:
                 all_labels += self.val_labels
             elif self.val_labels_path is not None:
-                all_labels += [l.strip() for l in AdaptationDataset.iter_text_file_per_line(self.val_labels_path)]
+                all_labels += [line.strip() for line in AdaptationDataset.iter_text_file_per_line(self.val_labels_path)]
 
             if self.compatible_head == Head.TOKEN_CLASSIFICATION:
                 all_labels = set(itertools.chain(*(token_labels_str.split() for token_labels_str in all_labels)))

@@ -5,10 +5,11 @@ that we performed for our ACL demo paper.
 We permute the following parameters:
 1. *Objectives*: we permute the training objectives amonf the ones initialised below.
 2. *Schedules*: We experiment with both Sequential and Parallel Schedule
-3. Pre-training vs. fine-tuning: additionally to fine-tuning, we increase Learning rate to 2e-4 and re-initialize the model
+3. Pre-training vs. fine-tuning: additionally to fine-tuning,
+   we increase Learning rate to 2e-4 and re-initialize the model
 
 """
-import comet_ml  # logging hook must be imported before torch
+import comet_ml  # logging hook must be imported before torch # noqa F401
 
 import torch
 from adaptor.adapter import Adapter

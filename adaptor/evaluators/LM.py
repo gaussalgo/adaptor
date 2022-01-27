@@ -4,7 +4,7 @@ import torch
 from transformers import PreTrainedTokenizer
 
 from .evaluator_base import EvaluatorBase
-from ..utils import Head
+from ..utils import Head, AdaptationDataset
 
 
 class Perplexity(EvaluatorBase):

@@ -1,4 +1,4 @@
-from typing import Iterable, Dict, Iterator, Union
+from typing import Iterable, Dict, Union
 
 import torch
 from torch.nn import CrossEntropyLoss

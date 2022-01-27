@@ -62,4 +62,3 @@ def test_mt_adaptation():
     adapter = Adapter(lang_module, schedule, args=training_arguments)
 
     run_adaptation(adapter)
-

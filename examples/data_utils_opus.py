@@ -65,9 +65,9 @@ class OPUSDataset(DataSource):
     def _load_translation_pairs(self, firstn: int) -> Tuple[List[str], List[str]]:
         src_file, tgt_file = self._maybe_download_unzip()
         with open(src_file, "r") as f:
-            src_lines = [self._preproc(l) for l in f.readlines()]
+            src_lines = [self._preproc(line) for line in f.readlines()]
         with open(tgt_file, "r") as f:
-            tgt_lines = [self._preproc(l) for l in f.readlines()]
+            tgt_lines = [self._preproc(line) for line in f.readlines()]
 
         src_lines = self._get_in_split(src_lines)
         tgt_lines = self._get_in_split(tgt_lines)
@@ -113,4 +113,3 @@ class OPUSDataset(DataSource):
             out_tgt_f = out_tgts[0]
 
         return out_src_f, out_tgt_f
-

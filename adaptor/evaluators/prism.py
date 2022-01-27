@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import logging
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import List, Dict, Iterator, Any, Optional, Tuple
@@ -189,8 +188,8 @@ class Prism:
                 sent_in_str = ' '.join([self.task.source_dictionary[x] for x in sent_in])
                 logger.debug(f'Input[{ii}] = ' + sent_in_str)
                 sent_out_tok = [self.task.source_dictionary[x] for x in sent_out]
-                logger.debug(f'Output[{ii}] = ' + \
-                             f' '.join([f'{a}[{b:.02f}]' for a, b in zip(sent_out_tok, scores_out)]))
+                logger.debug(f'Output[{ii}] = ' +
+                             ' '.join([f'{a}[{b:.02f}]' for a, b in zip(sent_out_tok, scores_out)]))
 
         if None in results:
             raise Exception('Missing one or more sentence scores')
@@ -274,7 +273,8 @@ def main():
     parser.add_argument('--model-dir', required=True, type=str, help='Model Directory')
     parser.add_argument('--lang', type=str, help='2-character language code (ISO 639-1)')
     parser.add_argument('--temperature', type=float, default=1.0, help='Softmax temperature: '
-                                                                       'values >1.0 produce more uniform samples and values <1.0 produce sharper samples')
+                                                                       'values >1.0 produce more uniform samples '
+                                                                       'and values <1.0 produce sharper samples')
     parser.add_argument('--segment-scores', action='store_true',
                         help='Print per-sentence scores instead of corpus level score')
     parser.add_argument('--debug', action='store_true', help='Print debug info')
@@ -339,10 +339,10 @@ def main():
 class SequenceScorer(object):
     """
     Copy of https://github.com/pytorch/fairseq/blob/master/fairseq/sequence_scorer.py
-    with softmax temperature control added 
+    with softmax temperature control added
 
     MIT License
-    
+
     Copyright (c) Facebook, Inc. and its affiliates.
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -351,10 +351,10 @@ class SequenceScorer(object):
     to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
     copies of the Software, and to permit persons to whom the Software is
     furnished to do so, subject to the following conditions:
-    
+
     The above copyright notice and this permission notice shall be included in all
     copies or substantial portions of the Software.
-    
+
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE

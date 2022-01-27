@@ -43,8 +43,8 @@ class AdaptationDataset(IterableDataset, abc.ABC):
     @staticmethod
     def iter_text_file_per_line(path: str) -> Iterable[str]:
         with open(path) as f:
-            for l in f:
-                yield l.strip()
+            for line in f:
+                yield line.strip()
 
 
 class TransformerAdaptationDataset(AdaptationDataset):

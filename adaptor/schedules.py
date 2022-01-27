@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import List, Iterable, Dict, Any, Tuple, Iterator, Optional, Union
+from typing import List, Iterable, Dict, Any, Tuple, Iterator, Optional
 
 import torch
 from transformers import TrainerCallback, TrainingArguments, TrainerState, TrainerControl

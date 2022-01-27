@@ -6,7 +6,7 @@ from torch.nn import CrossEntropyLoss
 from transformers import DataCollatorForSeq2Seq, BatchEncoding
 
 from .seq2seq import SequentialMixin
-from ..objectives.objective_base import SupervisedObjective, UnsupervisedObjective
+from ..objectives.objective_base import UnsupervisedObjective
 from ..utils import Head
 
 

@@ -1,5 +1,4 @@
 import abc
-import itertools
 from functools import lru_cache
 from typing import List, Sequence, Optional, Dict, Iterator, Union
 
@@ -8,7 +7,6 @@ import torch
 from bert_score import BERTScorer
 from rouge_score import rouge_scorer
 from sacrebleu import corpus_bleu
-from tqdm import tqdm
 from transformers import PreTrainedTokenizer, BatchEncoding
 
 from .evaluator_base import EvaluatorBase

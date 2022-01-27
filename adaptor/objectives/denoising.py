@@ -2,9 +2,8 @@ import abc
 import collections
 import itertools
 import random
-from typing import List, Tuple, Optional, Iterator, Iterable, Union, Dict
+from typing import List, Tuple, Optional, Iterator
 
-import torch
 from transformers import DataCollatorForSeq2Seq, BatchEncoding
 
 from .seq2seq import Sequence2SequenceMixin
