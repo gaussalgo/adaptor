@@ -44,7 +44,7 @@ jobs:
           set -ex
           python -V
           pip install -U pip
-          pip install -e .
+          pip install -e .[generative]
           pip install pytest
       - name: Unit tests
         run: pytest tests
