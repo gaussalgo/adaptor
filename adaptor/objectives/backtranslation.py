@@ -22,7 +22,7 @@ class BackTranslator(torch.nn.Module):
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.translator = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path).to(self.device)
-    @lru_cache(maxsize = 1000)
+    @lru_cache(maxsize = 10000)
     def translate(self, texts: List[str]) -> List[str]:
         """
         Translates input texts using the given translation model.
