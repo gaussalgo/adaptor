@@ -1,4 +1,4 @@
-from functools import lru_cache
+from functools import lru_cache, _CacheInfo
 import logging
 from typing import List, Iterator, Iterable
 
@@ -87,3 +87,6 @@ class BackTranslation(Sequence2SequenceMixin, UnsupervisedObjective):
         if targets_batch:
             # yield last nonempty residual batch
             yield self._construct_batch(targets_batch)
+
+    def cache_info(self) -> _CacheInfo:
+        return self.translator.translate.cache_info()
