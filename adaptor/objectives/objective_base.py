@@ -137,6 +137,7 @@ class Objective(abc.ABC):
         self.evaluations_history[split]["loss"].append(mean_loss)
 
         out_logs["%s_%s_loss" % (split, self)] = mean_loss
+        out_logs["%s_%s_num_batches" % (split, self)] = len(loss_history)
         for evaluator in self.evaluators[split]:
             dataset = self.get_dataset(split, 0, self.compatible_head_model.device,
                                        firstn=self.max_samples_per_log[split], add_oid=False)

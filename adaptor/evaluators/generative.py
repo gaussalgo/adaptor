@@ -65,6 +65,8 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
                     output_tokens = self._autoregressive_predict(model, batch)
                 else:
                     output_tokens = self._argmax_predict(model, batch)
+            # replace -100 labels (excluded from the loss), otherwise encoded as unknown tokens
+            batch["labels"][batch["labels"] < 0] = tokenizer.pad_token_id
 
             expected_str.extend(tokenizer.batch_decode(batch["labels"], skip_special_tokens=True))
             actual_str.extend(tokenizer.batch_decode(output_tokens, skip_special_tokens=True))
@@ -96,6 +98,7 @@ class BLEU(GenerativeEvaluator):
     smaller_is_better: bool = False
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+
         return corpus_bleu(actual_list, [list(expected_list)]).score
 
 
