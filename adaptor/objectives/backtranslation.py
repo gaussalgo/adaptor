@@ -1,3 +1,4 @@
+from functools import lru_cache
 import logging
 from typing import List, Iterator, Iterable
 
@@ -21,7 +22,7 @@ class BackTranslator(torch.nn.Module):
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.translator = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path).to(self.device)
-
+    @lru_cache(1000)
     def translate(self, texts: List[str]) -> List[str]:
         """
         Translates input texts using the given translation model.

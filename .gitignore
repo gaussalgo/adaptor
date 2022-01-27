@@ -1,6 +1,6 @@
-venv/
+.venv/
 **/__pycache__/
-domain_adaptation.egg-info/
+adaptor.egg-info/
 examples/adapation_output_dir
 entity_detector_model/
 bin/
