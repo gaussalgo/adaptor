@@ -47,4 +47,4 @@ jobs:
           pip install -e .[generative]
           pip install pytest
       - name: Unit tests
-        run: pytest tests
+        run: cd tests && pytest .
