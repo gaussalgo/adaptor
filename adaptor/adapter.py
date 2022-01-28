@@ -106,7 +106,7 @@ class Adapter(Trainer):
 
             # if the objective of this id was already persisted, we'll index the configs of the next ones
             if objectives_counter[str(objective)] != 0:
-                output_module_path += ("_" + objectives_counter[str(objective)])
+                output_module_path += "_{}".format(objectives_counter[str(objective)])
                 objectives_counter[str(objective)] += 1
 
             # we persist a shared tokenizer and training args either way

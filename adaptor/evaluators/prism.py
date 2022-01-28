@@ -141,8 +141,8 @@ class Prism:
         return self._binarize(sent)
 
     def _build_batches(self,
-                       source_tokens: List[List[int]],
-                       target_tokens: List[List[int]],
+                       source_tokens: List[torch.Tensor],
+                       target_tokens: List[torch.Tensor],
                        skip_invalid_size_inputs: bool) -> Iterator[Dict[str, Any]]:
         source_lengths = torch.LongTensor([t.numel() for t in source_tokens])
         target_lengths = torch.LongTensor([t.numel() for t in target_tokens])
@@ -445,6 +445,7 @@ class SequenceScorer(object):
                     avg_attn = attn
                 else:
                     avg_attn.add_(attn)
+        assert avg_probs is not None
         if len(models) > 1:
             avg_probs.div_(len(models))
             avg_probs.log_()
@@ -456,8 +457,8 @@ class SequenceScorer(object):
         start_idxs = sample['start_indices'] if 'start_indices' in sample else [0] * bsz
         for i in range(bsz):
             # remove padding from ref
-            ref = utils.strip_pad(sample['target'][i, start_idxs[i]:], self.pad) \
-                if sample['target'] is not None else None
+            assert sample['target'] is not None
+            ref = utils.strip_pad(sample['target'][i, start_idxs[i]:], self.pad)
             tgt_len = ref.numel()
             avg_probs_i = avg_probs[i][start_idxs[i]:start_idxs[i] + tgt_len]
             score_i = avg_probs_i.sum() / tgt_len

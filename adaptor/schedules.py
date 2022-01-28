@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import List, Iterable, Dict, Any, Tuple, Iterator, Optional
+from typing import List, Iterable, Dict, Any, Tuple, Iterator
 
 import torch
 from transformers import TrainerCallback, TrainingArguments, TrainerState, TrainerControl
@@ -30,7 +30,7 @@ class Schedule(abc.ABC):
     def __init__(self,
                  objectives: List[Objective],
                  args: AdaptationArguments,
-                 extra_eval_objectives: Optional[List[Objective]] = ()):
+                 extra_eval_objectives: Iterable[Objective] = ()):
         """
         Initialises queues of objectives outputs and training flow modification parameters.
         :param objectives: Training objectives to be scheduled

@@ -97,7 +97,7 @@ class Objective(abc.ABC):
         self.texts_path = None
         self.val_texts_path = None
 
-        if type(texts_or_path) == str:
+        if isinstance(texts_or_path, str):
             self.texts_path = texts_or_path
             with open(self.texts_path) as f:
                 self.dataset_length["train"] = len(f.readlines())
@@ -116,7 +116,7 @@ class Objective(abc.ABC):
             self.evaluations_history[split]["loss"] = []
 
         if val_texts_or_path is not None:
-            if type(val_texts_or_path) == str:
+            if isinstance(val_texts_or_path, str):
                 self.val_texts_path = val_texts_or_path
                 with open(self.val_texts_path) as f:
                     self.dataset_length["eval"] = len(f.readlines())
@@ -389,13 +389,13 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                  val_labels_or_path: Optional[Union[str, List[str]]] = None,
                  **kwargs):
 
-        if type(labels_or_path) == str:
+        if isinstance(labels_or_path, str):
             self.labels_path = labels_or_path
         else:
             self.labels = labels_or_path
 
         if val_labels_or_path is not None:
-            if type(val_labels_or_path) == str:
+            if isinstance(val_labels_or_path, str):
                 self.val_labels_path = val_labels_or_path
             else:
                 self.val_labels = val_labels_or_path
