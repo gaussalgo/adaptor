@@ -17,7 +17,7 @@ import os
 from .prism import Prism
 import subprocess
 from pathlib import Path
-from nltk.translate.meteor_score import meteor_score
+from nltk.translate.meteor_score import single_meteor_score
 import nltk
 import numpy as np
 
@@ -157,11 +157,12 @@ class PRISM(GenerativeEvaluator):
 class METEOR(GenerativeEvaluator):
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str],
-                     parameters: List[float] = (0.9, 3, 0.1)) -> float:
+                     parameters: List[float] = [0.9, 3, 0.1]) -> float:
         expected_list_tokenized = [item.split() for item in expected_list]
         actual_list_tokenized = [item.split() for item in actual_list]
+        print()
         all_scores = [
-            meteor_score([list(expected)], actual, alpha=parameters[0], beta=parameters[1], gamma=parameters[2])
+            single_meteor_score(expected, actual, alpha=parameters[0], beta=parameters[1], gamma=parameters[2])
             for expected, actual in zip(expected_list_tokenized, actual_list_tokenized)]
         return float(sum(all_scores) / len(all_scores))
 
