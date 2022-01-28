@@ -31,7 +31,7 @@ jobs:
     name: Type check
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         python: ['3.7', '3.8']
     container:
@@ -48,6 +48,8 @@ jobs:
           pip install pytype
       - name: Type check adaptor
         run: pytype adaptor
+      - name: Type check examples
+        run: pytype examples
       - name: Type check unit tests
         run: pytype tests
   unit-tests:
