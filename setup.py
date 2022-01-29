@@ -43,5 +43,8 @@ setup(
             "bert-score",
             "fairseq",
         ],
+        "examples": [
+            "comet-ml",
+        ],
     },
 )
