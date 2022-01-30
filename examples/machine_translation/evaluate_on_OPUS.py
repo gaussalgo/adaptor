@@ -3,7 +3,6 @@ Evaluate adapted checkpoint on selected OPUS data sets.
 """
 import argparse
 
-from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 from adaptor.evaluators.generative import BLEU
@@ -24,27 +23,26 @@ if __name__ == "__main__":
     argparser.add_argument('--device', type=str, default="cpu", help='Device for inference. Defaults to CPU.')
     args = argparser.parse_args()
 
-    adapted_test_dataset = OPUSDataset(args.opus_dataset, src_lang=args.src_lang, tgt_lang=args.tgt_lang,
-                                       split="test", data_dir=args.data_dir, firstn=args.firstn)
+    test_dataset = OPUSDataset(args.opus_dataset, src_lang=args.src_lang, tgt_lang=args.tgt_lang,
+                               split="test", data_dir=args.data_dir, firstn=args.firstn)
 
     lm_model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name_or_path).to(args.device)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
 
     assert hasattr(lm_model, "generate"), "For translation, we need a model that implements its own generate()."
 
-    bleus = []
+    metric = BLEU(use_generate=True, additional_sep_char="▁", progress_bar=False)
 
-    for src_text, ref_text in tqdm(zip(adapted_test_dataset.source, adapted_test_dataset.target),
-                                   total=len(adapted_test_dataset.source)):
+    references = []
+    hypotheses = []
+    for src_text, ref_text in zip(test_dataset.source, test_dataset.target):
+        references.append(ref_text)
         inputs = tokenizer(src_text, truncation=True, return_tensors="pt").to(args.device)
-        labels = tokenizer(ref_text, truncation=True, return_tensors="pt").input_ids.to(args.device)
-        metric = BLEU(use_generate=True, additional_sep_char="▁", progress_bar=False)
-        sample_bleu = metric(inputs=[inputs], model=lm_model, labels=[labels], tokenizer=tokenizer)
 
-        bleus.append(sample_bleu)
-        if len(bleus) % 10 == 0:
-            print("Current %s: %s" % (metric, (sum(bleus) / len(bleus))))
+        outputs = lm_model.generate(**inputs)
+        translations = tokenizer.batch_decode(outputs, remove_special_tokens=True)
+        hypotheses.append(translations[0])
 
-    print("Mean Test BLEU on %s (%s->%s): %s"
-          % (args.opus_dataset, args.src_lang, args.tgt_lang, sum(bleus) / len(bleus)))
-    print("Done")
+    bleu = BLEU().evaluate_str(references, hypotheses)
+    print("Experiment Test %s on %s (%s->%s): %s" %
+          (metric, args.opus_dataset, args.src_lang, args.tgt_lang, bleu))

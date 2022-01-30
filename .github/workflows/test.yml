@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python: ['3.8']
+        python: ['3.7', '3.8']
     container:
       image: python:${{ matrix.python }}
     steps:
@@ -44,10 +44,12 @@ jobs:
           set -ex
           python -V
           pip install -U pip
-          pip install -e .[generative]
+          pip install -e .[generative,examples]
           pip install pytype
       - name: Type check adaptor
         run: pytype adaptor
+      - name: Type check examples
+        run: pytype examples
       - name: Type check unit tests
         run: pytype tests
   unit-tests:
