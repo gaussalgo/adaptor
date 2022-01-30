@@ -247,7 +247,7 @@ class Objective(abc.ABC):
                     objective_i: int,
                     device: Union[str, torch.device],
                     firstn: Optional[int] = None,
-                    add_oid: bool = True) -> AdaptationDataset:
+                    add_oid: bool = True) -> TransformerAdaptationDataset:
         """
         Default logic for wrapping the inputs iterator into torch.IterableDataset, used in Trainer.train_dataloaer.
         :param split: A split of the retrieved dataset. `train` or `eval`.
@@ -256,7 +256,7 @@ class Objective(abc.ABC):
         :param firstn: If given, a number of the retrieved items from the dataset.
         :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
 
-        :return: AdaptationDataset wrapping a data set of this objective.
+        :return: TransformerAdaptationDataset wrapping a data set of this objective.
         """
         self.epoch += 1 if split == "train" else 0
 
