@@ -46,8 +46,10 @@ jobs:
           pip install -U pip
           pip install -e .[generative]
           pip install pytype
-      - name: Type check
-        run: pytype adaptor tests
+      - name: Type check adaptor
+        run: pytype adaptor
+      - name: Type check unit tests
+        run: pytype tests
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
