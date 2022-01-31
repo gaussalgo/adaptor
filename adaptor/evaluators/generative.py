@@ -18,11 +18,13 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
 
     compatible_heads: List[Head] = [Head.SEQ2SEQ]
 
-    def __init__(self,
-                 use_generate: bool = True,
-                 progress_bar: Optional[bool] = True,
-                 decides_convergence: Optional[bool] = False,
-                 additional_sep_char: Optional[str] = None):
+    def __init__(
+        self,
+        use_generate: bool = True,
+        progress_bar: Optional[bool] = True,
+        decides_convergence: Optional[bool] = False,
+        additional_sep_char: Optional[str] = None,
+    ):
         super().__init__(decides_convergence)
 
         self.additional_sep_char = additional_sep_char
@@ -31,26 +33,43 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
 
     @staticmethod
     @lru_cache(maxsize=1000)
-    def _autoregressive_predict_one(input_ids: torch.LongTensor,
-                                    attention_mask: torch.LongTensor,
-                                    model: torch.nn.Module) -> torch.LongTensor:
-        return model.generate(input_ids=input_ids, attention_mask=attention_mask).detach().cpu()
+    def _autoregressive_predict_one(
+        input_ids: torch.LongTensor,
+        attention_mask: torch.LongTensor,
+        model: torch.nn.Module,
+    ) -> torch.LongTensor:
+        return (
+            model.generate(input_ids=input_ids, attention_mask=attention_mask)
+            .detach()
+            .cpu()
+        )
 
-    def _autoregressive_predict(self,
-                                model: torch.nn.Module,
-                                inputs_batch: Dict[str, torch.LongTensor]) -> Iterator[torch.LongTensor]:
-        assert hasattr(model, "generate"), "If Evaluator(use_generate=True), " \
-                                           "evaluated model must have its generate() method."
+    def _autoregressive_predict(
+        self, model: torch.nn.Module, inputs_batch: Dict[str, torch.LongTensor]
+    ) -> Iterator[torch.LongTensor]:
+        assert hasattr(model, "generate"), (
+            "If Evaluator(use_generate=True), "
+            "evaluated model must have its generate() method."
+        )
 
-        return self._autoregressive_predict_one(inputs_batch["input_ids"], inputs_batch["attention_mask"], model)
+        return self._autoregressive_predict_one(
+            inputs_batch["input_ids"], inputs_batch["attention_mask"], model
+        )
 
     @staticmethod
-    def _argmax_predict(model: torch.nn.Module,
-                        inputs: Union[BatchEncoding, Dict[str, torch.FloatTensor]]) -> torch.Tensor:
+    def _argmax_predict(
+        model: torch.nn.Module,
+        inputs: Union[BatchEncoding, Dict[str, torch.FloatTensor]],
+    ) -> torch.Tensor:
         outputs = model(**inputs).logits
         return torch.argmax(outputs, -1)
 
-    def __call__(self, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, dataset: AdaptationDataset) -> float:
+    def __call__(
+        self,
+        model: torch.nn.Module,
+        tokenizer: PreTrainedTokenizer,
+        dataset: AdaptationDataset,
+    ) -> float:
         """
         Refer to the superclass documentation.
         """
@@ -66,17 +85,29 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
             # replace -100 labels (excluded from the loss), otherwise encoded as unknown tokens
             batch["labels"][batch["labels"] < 0] = tokenizer.pad_token_id
 
-            expected_str.extend(tokenizer.batch_decode(batch["labels"], skip_special_tokens=True))
-            actual_str.extend(tokenizer.batch_decode(output_tokens, skip_special_tokens=True))
+            expected_str.extend(
+                tokenizer.batch_decode(batch["labels"], skip_special_tokens=True)
+            )
+            actual_str.extend(
+                tokenizer.batch_decode(output_tokens, skip_special_tokens=True)
+            )
 
         if self.additional_sep_char is not None:
-            expected_str = [" ".join(expected_one.split(self.additional_sep_char)) for expected_one in expected_str]
-            actual_str = [" ".join(actual_one.split(self.additional_sep_char)) for actual_one in actual_str]
+            expected_str = [
+                " ".join(expected_one.split(self.additional_sep_char))
+                for expected_one in expected_str
+            ]
+            actual_str = [
+                " ".join(actual_one.split(self.additional_sep_char))
+                for actual_one in actual_str
+            ]
 
         return self.evaluate_str(list(expected_str), actual_str)
 
     @abc.abstractmethod
-    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+    def evaluate_str(
+        self, expected_list: Sequence[str], actual_list: Sequence[str]
+    ) -> float:
         """
         Evaluation of expected and actually-generated strings.
         This method can be used separately, in standalone in test evaluation.
@@ -89,13 +120,19 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
         pass
 
     def __str__(self) -> str:
-        return str(self.__class__.__name__) if not self.use_generate else str(self.__class__.__name__) + "-gen"
+        return (
+            str(self.__class__.__name__)
+            if not self.use_generate
+            else str(self.__class__.__name__) + "-gen"
+        )
 
 
 class BLEU(GenerativeEvaluator):
     smaller_is_better: bool = False
 
-    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+    def evaluate_str(
+        self, expected_list: Sequence[str], actual_list: Sequence[str]
+    ) -> float:
 
         return corpus_bleu(actual_list, [list(expected_list)]).score
 
@@ -109,11 +146,15 @@ class ROUGE(GenerativeEvaluator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
+        self.scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
 
-    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
-        all_scores = [self.scorer.score(expected, actual)['rougeL'].recall
-                      for expected, actual in zip(expected_list, actual_list)]
+    def evaluate_str(
+        self, expected_list: Sequence[str], actual_list: Sequence[str]
+    ) -> float:
+        all_scores = [
+            self.scorer.score(expected, actual)["rougeL"].recall
+            for expected, actual in zip(expected_list, actual_list)
+        ]
         return sum(all_scores) / len(expected_list)
 
 
@@ -130,7 +171,9 @@ class BERTScore(GenerativeEvaluator):
 
         self.scorer = BERTScorer(lang="any", model_type="bert-base-multilingual-cased")
 
-    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+    def evaluate_str(
+        self, expected_list: Sequence[str], actual_list: Sequence[str]
+    ) -> float:
         b_prec, b_rec, b_f_scores = self.scorer.score(expected_list, actual_list)
         return b_f_scores.mean().cpu().item()
 
@@ -141,18 +184,22 @@ class PRISM(GenerativeEvaluator):
     Refer to https://github.com/thompsonb/prism
     """
 
-    def __init__(self,
-                 language: str,
-                 use_cuda: Optional[bool] = None,
-                 probability: Optional[bool] = False,
-                 model_dir: str = "prism/model_dir",
-                 **kwargs):
+    def __init__(
+        self,
+        language: str,
+        use_cuda: Optional[bool] = None,
+        probability: Optional[bool] = False,
+        model_dir: str = "prism/model_dir",
+        **kwargs
+    ):
         # language must be set, see prism.py: MODELS['langs'] for a list of supported langs
         super().__init__(**kwargs)
         self.probability = probability
         self.scorer = Prism(model_dir, lang=language, use_cuda=use_cuda)
 
-    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+    def evaluate_str(
+        self, expected_list: Sequence[str], actual_list: Sequence[str]
+    ) -> float:
         # returns model score (-inf, 0), if par probability = True -> returns probability.
         # cand: candidate is the system output
         # ref: reference is the human reference
@@ -170,44 +217,87 @@ class METEOR(GenerativeEvaluator):
     def __init__(self, *args, **kwargs):
         import nltk
 
-        nltk.download('wordnet')
-        nltk.download('omw-1.4')
+        nltk.download("wordnet")
+        nltk.download("omw-1.4")
 
         super().__init__(*args, **kwargs)
 
-    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str],
-                     alpha: float = 0.9,  beta: float = 3, gamma: float = 0.1) -> float:
+    def evaluate_str(
+        self,
+        expected_list: Sequence[str],
+        actual_list: Sequence[str],
+        alpha: float = 0.9,
+        beta: float = 3,
+        gamma: float = 0.1,
+    ) -> float:
         from nltk.translate.meteor_score import single_meteor_score
 
         expected_list_tokenized = [item.split() for item in expected_list]
         actual_list_tokenized = [item.split() for item in actual_list]
-        all_scores = [single_meteor_score(expected, actual, alpha=alpha, beta=beta, gamma=gamma)
-                      for expected, actual in zip(expected_list_tokenized, actual_list_tokenized)]
+        all_scores = [
+            single_meteor_score(expected, actual, alpha=alpha, beta=beta, gamma=gamma)
+            for expected, actual in zip(expected_list_tokenized, actual_list_tokenized)
+        ]
 
         return float(sum(all_scores) / len(all_scores))
 
+
 class JS_DIVERGENCE(GenerativeEvaluator):
-    def KL_divergence(self, p: List[float], q: List[float]) ->float:
-        return sum([p_i * np.log2((p_i) / (q_i))  for p_i,q_i in zip(p,q) if q_i !=0])
+    def KL_divergence(self, p: List[float], q: List[float]) -> float:
+        return sum([p_i * np.log2((p_i) / (q_i)) for p_i, q_i in zip(p, q) if q_i != 0])
 
-    def JS_divergence(self, probs_real: List[float], probs_model: List[float], base:Optional[float] = 2) -> float:
-            if base is not None and base <= 0:
-                raise ValueError("`base` must be a positive number or `None`.")
-            probs_joined = [(prob_r +prob_m)/2 for prob_r,prob_m in zip(probs_real,probs_model)]
-            return (self.KL_divergence(probs_real,probs_joined) + self.KL_divergence(probs_model,probs_joined))/(2*np.log2(base))
+    def JS_divergence(
+        self,
+        probs_real: List[float],
+        probs_model: List[float],
+        base: Optional[float] = 2,
+    ) -> float:
+        if base is not None and base <= 0:
+            raise ValueError("`base` must be a positive number or `None`.")
+        probs_joined = [
+            (prob_r + prob_m) / 2 for prob_r, prob_m in zip(probs_real, probs_model)
+        ]
+        return (
+            self.KL_divergence(probs_real, probs_joined)
+            + self.KL_divergence(probs_model, probs_joined)
+        ) / (2 * np.log2(base))
 
-
-    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str], use_metric: Optional[GenerativeEvaluator] = PRISM(use_cuda = False, language="en", probability=True)) -> float:
-            if len(expected_list) != len(actual_list):
-                raise ValueError("Lists for evaluation are not the same size!")
-            _probs_real = [use_metric.evaluate_str([expected],[expected]) for expected in expected_list]
-            _probs_model = [use_metric.evaluate_str([expected],[actual]) for expected,actual in zip(expected_list,actual_list)]
-            is_prob:bool=all(prob >=0 and prob <=1 for prob in _probs_model) and all(prob >=0 and prob <=1 for prob in _probs_real)
-            is_percentage:bool = all(prob >=0 and prob <=100 for prob in _probs_model) and all(prob >=0 and prob <=100 for prob in _probs_real) and not is_prob
-            if is_prob:
-                divergence = self.JS_divergence(_probs_real,_probs_model,base=2)
-            elif is_percentage:
-                divergence = self.JS_divergence([prob*0.01 for prob in _probs_real],[prob*0.01 for prob in _probs_model],base=2)
-            else:
-               raise ValueError("Evaluator %s can only be used with evaluators returning probabilities or percentages.") 
-            return divergence
+    def evaluate_str(
+        self,
+        expected_list: Sequence[str],
+        actual_list: Sequence[str],
+        use_metric: GenerativeEvaluator = PRISM(
+            use_cuda=False, language="en", probability=True
+        ),
+    ) -> float:
+        if len(expected_list) != len(actual_list):
+            raise ValueError("Lists for evaluation are not the same size!")
+        _probs_real = [
+            use_metric.evaluate_str([expected], [expected])
+            for expected in expected_list
+        ]
+        _probs_model = [
+            use_metric.evaluate_str([expected], [actual])
+            for expected, actual in zip(expected_list, actual_list)
+        ]
+        is_prob: bool = all(prob >= 0 and prob <= 1 for prob in _probs_model) and all(
+            prob >= 0 and prob <= 1 for prob in _probs_real
+        )
+        is_percentage: bool = (
+            all(prob >= 0 and prob <= 100 for prob in _probs_model)
+            and all(prob >= 0 and prob <= 100 for prob in _probs_real)
+            and not is_prob
+        )
+        if is_prob:
+            divergence = self.JS_divergence(_probs_real, _probs_model, base=2)
+        elif is_percentage:
+            divergence = self.JS_divergence(
+                [prob * 0.01 for prob in _probs_real],
+                [prob * 0.01 for prob in _probs_model],
+                base=2,
+            )
+        else:
+            raise ValueError(
+                "Evaluator %s can only be used with evaluators returning probabilities or percentages."
+            )
+        return divergence
