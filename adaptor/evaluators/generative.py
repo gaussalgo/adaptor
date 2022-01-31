@@ -1,32 +1,22 @@
 import abc
 from functools import lru_cache
-
-from bert_score import BERTScorer
-import itertools
 from typing import List, Sequence, Optional, Dict, Iterator, Union
 
+import numpy as np
 import torch
+from bert_score import BERTScorer
 from rouge_score import rouge_scorer
 from sacrebleu import corpus_bleu
-from tqdm import tqdm
 from transformers import PreTrainedTokenizer, BatchEncoding
 
 from .evaluator_base import EvaluatorBase
-from ..utils import Head
-import os
 from .prism import Prism
-import subprocess
-from pathlib import Path
-from nltk.translate.meteor_score import single_meteor_score
-import nltk
-import numpy as np
-
-nltk.download('wordnet')
-nltk.download('omw-1.4')
+from ..utils import Head, AdaptationDataset
 
 
 class GenerativeEvaluator(EvaluatorBase, abc.ABC):
-    compatible_head: Head = Head.SEQ2SEQ
+
+    compatible_heads: List[Head] = [Head.SEQ2SEQ]
 
     def __init__(self,
                  use_generate: bool = True,
@@ -46,52 +36,56 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
                                     model: torch.nn.Module) -> torch.LongTensor:
         return model.generate(input_ids=input_ids, attention_mask=attention_mask).detach().cpu()
 
-    def _autoregressive_predict(self, inputs: List[Dict[str, torch.LongTensor]],
-                                model: torch.nn.Module) -> Iterator[torch.LongTensor]:
+    def _autoregressive_predict(self,
+                                model: torch.nn.Module,
+                                inputs_batch: Dict[str, torch.LongTensor]) -> Iterator[torch.LongTensor]:
         assert hasattr(model, "generate"), "If Evaluator(use_generate=True), " \
                                            "evaluated model must have its generate() method."
 
-        if self.progress_bar:
-            inputs = tqdm(inputs, desc="%s: Evaluating with generate()" % self)
-
-        for inputs_batch in inputs:
-            yield self._autoregressive_predict_one(inputs_batch["input_ids"], inputs_batch["attention_mask"], model)
+        return self._autoregressive_predict_one(inputs_batch["input_ids"], inputs_batch["attention_mask"], model)
 
     @staticmethod
-    def _argmax_predict(logit_outputs: List[torch.FloatTensor]) -> Iterator[torch.LongTensor]:
-        for outputs_batch in logit_outputs:
-            yield torch.argmax(outputs_batch, -1)
+    def _argmax_predict(model: torch.nn.Module,
+                        inputs: Union[BatchEncoding, Dict[str, torch.FloatTensor]]) -> torch.Tensor:
+        outputs = model(**inputs).logits
+        return torch.argmax(outputs, -1)
 
-    def __call__(self,
-                 inputs: Optional[List[Union[Dict[str, torch.LongTensor], BatchEncoding]]] = None,
-                 model: Optional[torch.nn.Module] = None,
-                 logit_outputs: Optional[List[torch.FloatTensor]] = None,
-                 labels: Optional[List[torch.LongTensor]] = None,
-                 tokenizer: Optional[PreTrainedTokenizer] = None) -> float:
+    def __call__(self, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, dataset: AdaptationDataset) -> float:
+        """
+        Refer to the superclass documentation.
+        """
+        expected_str = []
+        actual_str = []
 
-        if labels is None or tokenizer is None:
-            raise ValueError("Evaluator %s always needs 'labels' and 'tokenizer' arguments specified.")
+        for batch in dataset:
+            with torch.no_grad():
+                if self.use_generate:
+                    output_tokens = self._autoregressive_predict(model, batch)
+                else:
+                    output_tokens = self._argmax_predict(model, batch)
+            # replace -100 labels (excluded from the loss), otherwise encoded as unknown tokens
+            batch["labels"][batch["labels"] < 0] = tokenizer.pad_token_id
 
-        for label_t in labels:
-            label_t[label_t < 0] = 0
+            expected_str.extend(tokenizer.batch_decode(batch["labels"], skip_special_tokens=True))
+            actual_str.extend(tokenizer.batch_decode(output_tokens, skip_special_tokens=True))
 
-        expected_str = itertools.chain(*(tokenizer.batch_decode(batch_labels, skip_special_tokens=True)
-                                         for batch_labels in labels))
-        with torch.no_grad():
-            if self.use_generate:
-                output_tokens_gen = itertools.chain(*self._autoregressive_predict(inputs, model))
-            else:
-                output_tokens_gen = itertools.chain(*self._argmax_predict(logit_outputs))
-
-            actual_str = tokenizer.batch_decode(output_tokens_gen, skip_special_tokens=True)
-            if self.additional_sep_char is not None:
-                expected_str = [" ".join(expected_one.split(self.additional_sep_char)) for expected_one in expected_str]
-                actual_str = [" ".join(actual_one.split(self.additional_sep_char)) for actual_one in actual_str]
+        if self.additional_sep_char is not None:
+            expected_str = [" ".join(expected_one.split(self.additional_sep_char)) for expected_one in expected_str]
+            actual_str = [" ".join(actual_one.split(self.additional_sep_char)) for actual_one in actual_str]
 
         return self.evaluate_str(list(expected_str), actual_str)
 
     @abc.abstractmethod
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+        """
+        Evaluation of expected and actually-generated strings.
+        This method can be used separately, in standalone in test evaluation.
+        When implementing evaluation of generative language model, you can implement only this method.
+        See other GenerativeEvaluators (e.g. BLEU, BERTScore) for examples.
+
+        :param expected_list: A sequence of reference texts, that model is expected to generate.
+        :param actual_list: A sequence of actually-generated texts by the model.
+        """
         pass
 
     def __str__(self) -> str:
@@ -102,10 +96,15 @@ class BLEU(GenerativeEvaluator):
     smaller_is_better: bool = False
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+
         return corpus_bleu(actual_list, [list(expected_list)]).score
 
 
 class ROUGE(GenerativeEvaluator):
+    """
+    Computes mean ROUGE-L score.
+    """
+
     smaller_is_better: bool = False
 
     def __init__(self, **kwargs):
@@ -119,6 +118,11 @@ class ROUGE(GenerativeEvaluator):
 
 
 class BERTScore(GenerativeEvaluator):
+    """
+    Compute BERTScore for a set of translations.
+    Refer to https://github.com/Tiiiger/bert_score
+    """
+
     smaller_is_better: bool = False
 
     def __init__(self, **kwargs):
@@ -132,6 +136,10 @@ class BERTScore(GenerativeEvaluator):
 
 
 class PRISM(GenerativeEvaluator):
+    """
+    Computes PRISM score for a set of translations or paraphrases.
+    Refer to https://github.com/thompsonb/prism
+    """
 
     def __init__(self,
                  language: str,
@@ -155,15 +163,27 @@ class PRISM(GenerativeEvaluator):
 
 
 class METEOR(GenerativeEvaluator):
+    """
+    Computes METEOR score over a set of translations.
+    """
+
+    def __init__(self, *args, **kwargs):
+        import nltk
+
+        nltk.download('wordnet')
+        nltk.download('omw-1.4')
+
+        super().__init__(*args, **kwargs)
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str],
-                     parameters: List[float] = [0.9, 3, 0.1]) -> float:
+                     alpha: float = 0.9,  beta: float = 3, gamma: float = 0.1) -> float:
+        from nltk.translate.meteor_score import single_meteor_score
+
         expected_list_tokenized = [item.split() for item in expected_list]
         actual_list_tokenized = [item.split() for item in actual_list]
-        print()
-        all_scores = [
-            single_meteor_score(expected, actual, alpha=parameters[0], beta=parameters[1], gamma=parameters[2])
-            for expected, actual in zip(expected_list_tokenized, actual_list_tokenized)]
+        all_scores = [single_meteor_score(expected, actual, alpha=alpha, beta=beta, gamma=gamma)
+                      for expected, actual in zip(expected_list_tokenized, actual_list_tokenized)]
+
         return float(sum(all_scores) / len(all_scores))
 
 class JS_DIVERGENCE(GenerativeEvaluator):

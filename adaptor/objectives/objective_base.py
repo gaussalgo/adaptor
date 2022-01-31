@@ -33,8 +33,6 @@ class Objective(abc.ABC):
 
     dataset_length: Dict[str, int]
     loss_history: Dict[str, List[float]]
-    inputs_history: Dict[str, List[Dict[str, torch.LongTensor]]]
-    outputs_history: Dict[str, List[Tuple[torch.FloatTensor, torch.LongTensor]]]
     evaluations_history: Dict[str, Dict[Union[str, EvaluatorBase], List[float]]]
     progressbar: Dict[str, trange]
     evaluators: Dict[str, List[EvaluatorBase]]
@@ -71,9 +69,8 @@ class Objective(abc.ABC):
         :param objective_id: Identifier of this objective, used in logging and checkpoints persistence.
         Necessary, if you train with multiple objectives of the same type, otherwise they might override each other.
         :param loss_weight: A scalar of the loss of this objective in multi-objective training.
-        :param max_samples_per_log: Maximum number of training outputs this objective will remember for logging.
-        Reduces memory consumption of the training process.
-        :param max_samples_per_eval_log: Maximum number of evaluation outputs this objective will remember for logging.
+        :param max_samples_per_log: Maximum number batches that this objective will compute for logging.
+        :param max_samples_per_eval_log: Maximum number batches that this objective will compute for evaluation logging.
         """
 
         self.batch_size = batch_size
@@ -89,8 +86,6 @@ class Objective(abc.ABC):
         self.epoch = 0
         self.dataset_length = {"train": 0, "eval": 0}
         self.loss_history = {"train": [], "eval": []}  # loss is treated differently than other outputs
-        self.inputs_history = {"train": [], "eval": []}
-        self.outputs_history = {"train": [], "eval": []}
         self.evaluators = {"train": [], "eval": []}
         self.evaluations_history = {"train": {}, "eval": {}}
         self.max_samples_per_log = {"train": max_samples_per_log, "eval": max_samples_per_eval_log}
@@ -102,18 +97,17 @@ class Objective(abc.ABC):
         self.texts_path = None
         self.val_texts_path = None
 
-        if type(texts_or_path) == str:
+        if isinstance(texts_or_path, str):
             self.texts_path = texts_or_path
             with open(self.texts_path) as f:
                 self.dataset_length["train"] = len(f.readlines())
         else:
             self.texts = texts_or_path
             self.dataset_length["train"] = len(self.texts)
-        assert self.dataset_length, \
-            "Objective %s was initialized with texts_or_path of zero length, this wouldn't work :("
+
         for split, given_evaluators in zip(("train", "eval"), (train_evaluators, val_evaluators)):
             for given_evaluator in given_evaluators:
-                if given_evaluator.compatible_head != self.compatible_head:
+                if self.compatible_head not in given_evaluator.compatible_heads:
                     raise ValueError("%s got incompatible evaluator: %s" % (self, given_evaluator))
                 self.evaluators[split].append(given_evaluator)
                 self.evaluations_history[split][given_evaluator] = []
@@ -122,7 +116,7 @@ class Objective(abc.ABC):
             self.evaluations_history[split]["loss"] = []
 
         if val_texts_or_path is not None:
-            if type(val_texts_or_path) == str:
+            if isinstance(val_texts_or_path, str):
                 self.val_texts_path = val_texts_or_path
                 with open(self.val_texts_path) as f:
                     self.dataset_length["eval"] = len(f.readlines())
@@ -138,30 +132,21 @@ class Objective(abc.ABC):
         """
         out_logs = {}
         # aggregate per-progress_bar-steps, or per-evaluation-steps, keep the results of unprocessed evaluations
-        logger.warning("Constructing %s logs based on %s samples" % (split, len(self.outputs_history[split])))
-        if self.outputs_history[split]:
-            # if nonempty (last evaluation)
-            # aggregate recent losses into the report, clear out losses cache
-            mean_loss = sum(self.loss_history[split]) / len(self.loss_history[split])
-            self.evaluations_history[split]["loss"].append(mean_loss)
+        loss_history = self.loss_history[split][-self.max_samples_per_log[split]:]
+        mean_loss = sum(loss_history) / len(loss_history) if len(loss_history) else 0
+        self.evaluations_history[split]["loss"].append(mean_loss)
 
-            out_logs["%s_%s_loss" % (split, self)] = mean_loss
-            out_logs["%s_%s_num_batches" % (split, self)] = len(self.outputs_history[split])
-            for evaluator in self.evaluators[split]:
-                n_last_inputs = self.inputs_history[split]
-                n_last_logits = [logits for logits, labels in self.outputs_history[split]]
-                n_last_labels = [labels for logits, labels in self.outputs_history[split]]
+        out_logs["%s_%s_loss" % (split, self)] = mean_loss
+        out_logs["%s_%s_num_batches" % (split, self)] = len(loss_history)
+        for evaluator in self.evaluators[split]:
+            dataset = self.get_dataset(split, 0, self.compatible_head_model.device,
+                                       firstn=self.max_samples_per_log[split], add_oid=False)
 
-                # evaluator should already return an aggregated value, so unlike loss, we don't average it
-                evaluator_value = evaluator(n_last_inputs, self.compatible_head_model,
-                                            n_last_logits, n_last_labels, self.tokenizer)
-                self.evaluations_history[split][evaluator].append(evaluator_value)
-                out_logs["%s_%s_%s" % (split, self, evaluator)] = evaluator_value
+            # evaluator should already return an aggregated value, so unlike loss, we don't average it
+            evaluator_value = evaluator(self.compatible_head_model, self.tokenizer, dataset)
+            self.evaluations_history[split][evaluator].append(evaluator_value)
+            out_logs["%s_%s_%s" % (split, self, evaluator)] = evaluator_value
 
-            # LM logits, each of shape (batch_size, n_tokens, vocab_size) can consume a lot of memory
-            # we erase the raw outputs after the progress_bar, to save space, but we remember the values of Evaluators
-            self.inputs_history[split] = []
-            self.outputs_history[split] = []
         return out_logs
 
     def is_finished(self, convergence_patience: Optional[int] = None, max_steps: Optional[int] = None) -> bool:
@@ -215,19 +200,6 @@ class Objective(abc.ABC):
 
         return passed_patience_evals and did_not_improve
 
-    def _register_outputs(self, split: str, logit_outputs: torch.FloatTensor, labels: torch.LongTensor) -> None:
-        """
-        Adds model outputs to the memory. Will be later used for generating logs by Evaluators.
-        :param split: Data split. Either `train` or `eval`.
-        :param logit_outputs: Raw output of this objective's head.
-        :param labels: Expected true labels of this objective.
-        """
-        self.outputs_history[split].append((logit_outputs.detach().cpu(), labels.detach().cpu()))
-
-        # memory saving cleanup - outputs of 100+ Language modeling outputs can span 100GB+ of memory
-        self.inputs_history[split] = self.inputs_history[split][-self.max_samples_per_log[split]:]
-        self.outputs_history[split] = self.outputs_history[split][-self.max_samples_per_log[split]:]
-
     @abc.abstractmethod
     def _compute_loss(self, logit_outputs: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
         """
@@ -248,7 +220,6 @@ class Objective(abc.ABC):
         :param split:
         :return:
         """
-        self._register_outputs(split, logit_outputs, labels)
         loss = self._compute_loss(logit_outputs, labels)
         self.loss_history[split].append(loss.item())
         self.num_steps += 1
@@ -271,14 +242,21 @@ class Objective(abc.ABC):
         """
         pass
 
-    def get_dataset(self, split: str, objective_i: int, device: Union[str, torch.device]) -> AdaptationDataset:
+    def get_dataset(self,
+                    split: str,
+                    objective_i: int,
+                    device: Union[str, torch.device],
+                    firstn: Optional[int] = None,
+                    add_oid: bool = True) -> TransformerAdaptationDataset:
         """
         Default logic for wrapping the inputs iterator into torch.IterableDataset, used in Trainer.train_dataloaer.
         :param split: A split of the retrieved dataset. `train` or `eval`.
         :param objective_i: Rank of this objective in schedule. Used only to properly set up progress bar.
         :param device: Device to transfer this data set to.
+        :param firstn: If given, a number of the retrieved items from the dataset.
+        :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
 
-        :return: AdaptationDataset wrapping a data set of this objective.
+        :return: TransformerAdaptationDataset wrapping a data set of this objective.
         """
         self.epoch += 1 if split == "train" else 0
 
@@ -291,20 +269,20 @@ class Objective(abc.ABC):
 
         inputs_iter = self._get_inputs_iterator(split)
 
-        def _sample_to_device(sample: Dict[str, torch.LongTensor]) -> Dict[str, torch.LongTensor]:
+        def _sample_to_device(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
             return {k: v.to(device) if k != "oid" else v for k, v in sample.items()}
 
-        def _add_oid(sample: Dict[str, Union[int, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
+        def _add_oid(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
             sample["oid"] = id(self)
             return sample
 
-        def _register_input_sample(sample: Dict[str, Union[int, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-            self.inputs_history[split].append(sample)
-            return sample
-
         device_inputs_iter = map(_sample_to_device, inputs_iter)
-        device_inputs_iter = map(_add_oid, device_inputs_iter)
-        device_inputs_iter = map(_register_input_sample, device_inputs_iter)
+
+        if add_oid:
+            device_inputs_iter = map(_add_oid, device_inputs_iter)
+
+        if firstn is not None and firstn < self.dataset_length[split]:
+            device_inputs_iter = itertools.islice(device_inputs_iter, firstn)
 
         return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split])
 
@@ -411,13 +389,13 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                  val_labels_or_path: Optional[Union[str, List[str]]] = None,
                  **kwargs):
 
-        if type(labels_or_path) == str:
+        if isinstance(labels_or_path, str):
             self.labels_path = labels_or_path
         else:
             self.labels = labels_or_path
 
         if val_labels_or_path is not None:
-            if type(val_labels_or_path) == str:
+            if isinstance(val_labels_or_path, str):
                 self.val_labels_path = val_labels_or_path
             else:
                 self.val_labels = val_labels_or_path
@@ -438,11 +416,11 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
             if self.labels is not None:
                 all_labels = self.labels
             else:
-                all_labels = [l.strip() for l in AdaptationDataset.iter_text_file_per_line(self.labels_path)]
+                all_labels = [line.strip() for line in AdaptationDataset.iter_text_file_per_line(self.labels_path)]
             if self.val_labels is not None:
                 all_labels += self.val_labels
             elif self.val_labels_path is not None:
-                all_labels += [l.strip() for l in AdaptationDataset.iter_text_file_per_line(self.val_labels_path)]
+                all_labels += [line.strip() for line in AdaptationDataset.iter_text_file_per_line(self.val_labels_path)]
 
             if self.compatible_head == Head.TOKEN_CLASSIFICATION:
                 all_labels = set(itertools.chain(*(token_labels_str.split() for token_labels_str in all_labels)))

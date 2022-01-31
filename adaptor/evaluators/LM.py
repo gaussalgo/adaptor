@@ -1,20 +1,15 @@
-from typing import List, Optional, Dict, Union
+from typing import List
 
 import torch
-from transformers import PreTrainedTokenizer, BatchEncoding
+from transformers import PreTrainedTokenizer
 
-from adaptor.evaluators.evaluator_base import EvaluatorBase
-from adaptor.utils import Head
+from .evaluator_base import EvaluatorBase
+from ..utils import Head, AdaptationDataset
 
 
 class Perplexity(EvaluatorBase):
 
-    compatible_head: Head = Head.LANGUAGE_MODEL
+    compatible_heads: List[Head] = [Head.MLM, Head.CLM, Head.SEQ2SEQ]
 
-    def __call__(self,
-                 inputs: Optional[List[Union[Dict[str, torch.LongTensor], BatchEncoding]]] = None,
-                 model: Optional[torch.nn.Module] = None,
-                 logit_outputs: Optional[List[torch.FloatTensor]] = None,
-                 labels: Optional[List[torch.LongTensor]] = None,
-                 tokenizer: Optional[PreTrainedTokenizer] = None):
+    def __call__(self, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, dataset: AdaptationDataset) -> float:
         raise NotImplementedError()

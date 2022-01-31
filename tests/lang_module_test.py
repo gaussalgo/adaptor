@@ -13,8 +13,8 @@ def test_register_head():
     lang_module = LangModule("bert-base-multilingual-cased")
 
     objective = TokenClassification(lang_module,
-                                    texts_or_path=paths["texts"]["target_domain"]["ner"],
-                                    labels_or_path=paths["labels"]["target_domain"]["ner"],
+                                    texts_or_path=paths["texts"]["ner"],
+                                    labels_or_path=paths["labels"]["ner"],
                                     batch_size=4)
     assert objective.compatible_head_model
 
@@ -24,11 +24,11 @@ def test_merge_objectives():
     lang_module = LangModule("bert-base-multilingual-cased")
 
     objective_base = TokenClassification(lang_module,
-                                         texts_or_path=paths["texts"]["target_domain"]["ner"],
-                                         labels_or_path=paths["labels"]["target_domain"]["ner"],
+                                         texts_or_path=paths["texts"]["ner"],
+                                         labels_or_path=paths["labels"]["ner"],
                                          batch_size=4)
     objective_new = MaskedLanguageModeling(lang_module,
-                                           texts_or_path=paths["texts"]["target_domain"]["unsup"],
+                                           texts_or_path=paths["texts"]["unsup"],
                                            batch_size=4)
 
     # check that merge-able modules now refer to the same physical address

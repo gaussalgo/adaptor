@@ -1,24 +1,46 @@
-from typing import List, Optional, Dict, Union
+import itertools
+from typing import List
 
 import torch
-from transformers import PreTrainedTokenizer, BatchEncoding
+from transformers import PreTrainedTokenizer
 
-from adaptor.evaluators.evaluator_base import EvaluatorBase
-from adaptor.utils import Head
+from .evaluator_base import EvaluatorBase
+from ..utils import Head, AdaptationDataset
 
 
-class MacroAccuracy(EvaluatorBase):
+class MeanPerCategoryFScore(EvaluatorBase):
+    """
+    Token classification accuracy, where each input sample of dataset
+    gets a sequence of `labels` of `num_input_ids` length.
+    """
 
-    compatible_head: Head = Head.TOKEN_CLASSIFICATION
+    compatible_heads: List[Head] = [Head.TOKEN_CLASSIFICATION]
     smaller_is_better: bool = False
 
-    def __call__(self,
-                 inputs: Optional[List[Union[Dict[str, torch.LongTensor], BatchEncoding]]] = None,
-                 model: Optional[torch.nn.Module] = None,
-                 logit_outputs: Optional[List[torch.FloatTensor]] = None,
-                 labels: Optional[List[torch.LongTensor]] = None,
-                 tokenizer: Optional[PreTrainedTokenizer] = None):
+    @staticmethod
+    def _per_category_fscore(category_i: int, expected: List[int], actual: List[int]) -> float:
+        """
+        F-Score for a single category, given a flattened list of expected and actual labels.
+        """
+        true_pos = sum(exp == act == category_i for exp, act in zip(expected, actual))
+        false_pos = sum((exp != act) and (act == category_i) for exp, act in zip(expected, actual))
+        false_neg = sum((exp != act) and (act != category_i) for exp, act in zip(expected, actual))
 
-        return sum([logits.argmax(-1) == label
-                    for logits, label in zip(logit_outputs, labels)]) / torch.stack(labels).flatten().shape[0]
+        return (true_pos /
+                (true_pos + (1/2 * (false_pos + false_neg))))
 
+    def __call__(self, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, dataset: AdaptationDataset) -> float:
+        """
+        Refer to the superclass documentation.
+        """
+        expected = []
+        actual = []
+
+        for batch in dataset:
+            expected.extend(itertools.chain(*batch["labels"]))
+            actual.extend(itertools.chain(*model(**batch).argmax(-1)))
+
+        all_categories = set(expected)
+        per_category_fscores = [self._per_category_fscore(cat_i, expected, actual) for cat_i in all_categories]
+
+        return sum(per_category_fscores) / len(all_categories)

@@ -18,8 +18,8 @@ class TokenClassification(SupervisedObjective):
         Performs batching and collation and return resulting encodings.
         :param texts: Sentence-level input texts.
         :param labels: Sentence-level input labels, aligned with input words by spaces.
-        For an example of expected inputs, see tests/mock_data/ner_texts_sup.txt
-        and texts/mock_data/ner_texts_sup_labels.txt
+        For an example of expected inputs, see tests/mock_data/supervised_texts.txt
+        and texts/mock_data/supervised_texts_token_labels.txt
 
         :return: Aligned encodings.
         """
@@ -47,14 +47,12 @@ class TokenClassification(SupervisedObjective):
                 "Text: %s \nLabels: %s" % (text, text_labels)
 
             # assign current label to current wordpiece until the current_token is fully iterated-over
-            current_token = tokens.pop(0)
-            current_label = labels.pop(0)
+            current_token, current_label = tokens.pop(0), labels.pop(0)  # noqa F401: current_token unused
             for wpiece_id, wpiece in zip(wpiece_ids, wordpieces):
                 next_token = tokens[0]
                 if next_token.startswith(wpiece):
                     # if the next token starts with a current wordpiece, move to the next token + label
-                    current_token = tokens.pop(0)
-                    current_label = labels.pop(0)
+                    current_token, current_label = tokens.pop(0), labels.pop(0)  # noqa F401: current_token unused
                 out_label_ids.append(self.labels_map[current_label])
 
             batch_features.append({"input_ids": wpiece_ids,

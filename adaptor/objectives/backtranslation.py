@@ -1,6 +1,6 @@
 from functools import lru_cache, _CacheInfo
 import logging
-from typing import List, Iterator, Iterable
+from typing import List, Iterator, Iterable, Optional
 
 import torch
 from transformers import DataCollatorForSeq2Seq, AutoTokenizer, AutoModelForSeq2SeqLM
@@ -16,7 +16,7 @@ class BackTranslator(torch.nn.Module):
     Back-translation interface that can be used out-of-box in BackTranslation Objective.
     """
 
-    def __init__(self, model_name_or_path: str, device: str = None):
+    def __init__(self, model_name_or_path: str, device: Optional[str] = None):
         super().__init__()
         self.device = device if device is not None else "cuda" if torch.cuda.is_available() else "cpu"
 

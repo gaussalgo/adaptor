@@ -1,4 +1,4 @@
-from adaptor.evaluators.generative import BLEU, JS_DIVERGENCE, GenerativeEvaluator, ROUGE, BERTScore, PRISM, METEOR
+from adaptor.evaluators.generative import BLEU, GenerativeEvaluator, ROUGE, BERTScore, METEOR
 from adaptor.lang_module import LangModule
 from adaptor.objectives.objective_base import Objective
 from adaptor.objectives.seq2seq import Sequence2Sequence
@@ -30,8 +30,8 @@ def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> Non
     global gen_lang_module
 
     gen_objective = Sequence2Sequence(gen_lang_module,
-                                      texts_or_path=paths["texts"]["target_domain"]["translation"],
-                                      labels_or_path=paths["labels"]["target_domain"]["translation"],
+                                      texts_or_path=paths["texts"]["translation"],
+                                      labels_or_path=paths["labels"]["translation"],
                                       batch_size=1,
                                       source_lang_id="en",
                                       target_lang_id="cs",
@@ -54,10 +54,18 @@ def test_bertscore():
 
 
 def test_prism():
-    assert_gen_evaluator_logs(PRISM(use_cuda=False, language="en", decides_convergence=True), "train")
+    """
+    PRISM downloads relatively big model, we omit that by default.
+    """
+    # from adaptor.evaluators.generative import PRISM
+    # assert_gen_evaluator_logs(PRISM(use_cuda=False, language="en", decides_convergence=True), "train")
 
 def test_meteor():
     assert_gen_evaluator_logs(METEOR(decides_convergence=True), "train")
 
 def test_divergence():
-    assert_gen_evaluator_logs(JS_DIVERGENCE(decides_convergence=True), "train")
+    """
+    Uses PRISM - omit by default.
+    """
+    # from adaptor.evaluators.generative import JS_DIVERGENCE
+    #assert_gen_evaluator_logs(JS_DIVERGENCE(decides_convergence=True), "train")

@@ -6,7 +6,7 @@ We perform the following steps:
 1. Load datasets: once available, this can be rewritten for HF Datasets library
 2. Perform a combined adaptation on both parallel data and monolingual, OpenSubtitles domain using ParallelSchedule.
 """
-import comet_ml  # logging hook must be imported before torch
+import comet_ml  # noqa F401 logging hook must be imported before torch
 
 import torch
 from adaptor.adapter import Adapter
@@ -132,12 +132,12 @@ metric = BLEU(use_generate=True, additional_sep_char="▁", progress_bar=False)
 
 # evaluation is performed right at the end of the training
 for test_dataset_id in test_datasets:
-    test_source = OPUSDataset(test_dataset_id, "test", src_lang, tgt_lang, data_dir=tmp_data_dir, firstn=test_firstn)
+    test_source = OPUSDataset(test_dataset_id, "test", src_lang, tgt_lang, data_dir=data_dir, firstn=test_firstn)
 
     references = []
     hypotheses = []
     for src_text, ref_text in zip(test_source.source, test_source.target):
-        referencess.append(ref_text)
+        references.append(ref_text)
         inputs = lang_module.tokenizer(src_text, truncation=True, return_tensors="pt").to(test_device)
 
         outputs = translator_model.generate(**inputs)

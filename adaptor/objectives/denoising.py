@@ -2,9 +2,8 @@ import abc
 import collections
 import itertools
 import random
-from typing import List, Tuple, Optional, Iterator, Iterable, Union, Dict
+from typing import List, Tuple, Optional, Iterator
 
-import torch
 from transformers import DataCollatorForSeq2Seq, BatchEncoding
 
 from .seq2seq import Sequence2SequenceMixin
@@ -15,8 +14,8 @@ class NoisingStrategy(abc.ABC):
     """
     Implementations of noising strategies inspired by https://arxiv.org/abs/1910.13461
     """
-    special_char_tokens: Tuple[str] = (".", ",", "?", "!", "-", "/")
-    sentence_sep_chars: Tuple[str] = (".", "?", "!")
+    special_char_tokens: Tuple[str, ...] = (".", ",", "?", "!", "-", "/")
+    sentence_sep_chars: Tuple[str, ...] = (".", "?", "!")
 
     def __init__(self, application_ratio: float):
         self.application_ratio = application_ratio
@@ -98,27 +97,19 @@ class Rotate(NoisingStrategy):
 
 
 class Infilling(NoisingStrategy):
-
-    def __call__(self, text: str, apply_per_sentence: bool) -> str:
-        pass
+    pass
 
 
 class Deletion(NoisingStrategy):
-
-    def __call__(self, text: str, apply_per_sentence: bool) -> str:
-        pass
+    pass
 
 
 class Permutation(NoisingStrategy):
-
-    def __call__(self, text: str, apply_per_sentence: bool) -> str:
-        pass
+    pass
 
 
 class Masking(NoisingStrategy):
-
-    def __call__(self, text: str, apply_per_sentence: bool) -> str:
-        pass
+    pass
 
 
 class DenoisingObjective(Sequence2SequenceMixin, UnsupervisedObjective):

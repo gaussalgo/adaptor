@@ -6,7 +6,7 @@ from torch.nn import CrossEntropyLoss
 from transformers import DataCollatorForSeq2Seq, BatchEncoding
 
 from .seq2seq import SequentialMixin
-from ..objectives.objective_base import SupervisedObjective, UnsupervisedObjective
+from ..objectives.objective_base import UnsupervisedObjective
 from ..utils import Head
 
 
@@ -61,32 +61,32 @@ class DataCollatorForCausalLM(DataCollatorForSeq2Seq):
                     feature["labels"] + remainder if padding_side == "right" else remainder + feature["labels"]
                 )
         num_features = len(features)
-        features = self.tokenizer.pad(
+        out_features = self.tokenizer.pad(
             features,
-            padding=self.padding,
-            max_length=self.max_length,
+            padding="max_length",
+            max_length=max_length,
             pad_to_multiple_of=self.pad_to_multiple_of,
             return_tensors=return_tensors,
         )
 
         # prepare decoder_input_ids, if model requires it
         if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels"):
-            decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=features["input_ids"])
-            features["decoder_input_ids"] = decoder_input_ids
+            decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=out_features["input_ids"])
+            out_features["decoder_input_ids"] = decoder_input_ids
 
             # encoder causal mask is full by default of translation models,
             # without it, model learns to just copy the input
             # with standard attention_mask, we rely on a resolution of AutoModelForCausalLM for CLM objectives
             causal_mask = torch.tril(torch.ones(max_length, max_length, dtype=torch.int32), diagonal=0)  # attended pos
             causal_mask = causal_mask.expand(num_features, max_length, max_length)  # for batch_size
-            features["encoder_attention_mask"] = causal_mask
+            out_features["encoder_attention_mask"] = causal_mask
 
         bos_id = self.model.config.bos_token_id if self.model.config.bos_token_id is not None else 0
         pad_id = self.model.config.pad_token_id if self.model.config.pad_token_id is not None else 0
 
         # CLM -> shift input one token to the right
-        features["input_ids"] = self.shift_tokens_right(features["input_ids"], bos_id, pad_id)
-        return features
+        out_features["input_ids"] = self.shift_tokens_right(out_features["input_ids"], bos_id, pad_id)
+        return out_features
 
 
 class CausalLanguageModeling(SequentialMixin, UnsupervisedObjective, abc.ABC):
