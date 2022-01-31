@@ -15,7 +15,6 @@ from ..utils import Head, AdaptationDataset
 
 
 class GenerativeEvaluator(EvaluatorBase, abc.ABC):
-
     compatible_heads: List[Head] = [Head.SEQ2SEQ]
 
     def __init__(self,
@@ -96,7 +95,6 @@ class BLEU(GenerativeEvaluator):
     smaller_is_better: bool = False
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
-
         return corpus_bleu(actual_list, [list(expected_list)]).score
 
 
@@ -170,13 +168,17 @@ class METEOR(GenerativeEvaluator):
     def __init__(self, *args, **kwargs):
         import nltk
 
-        nltk.download('wordnet')
-        nltk.download('omw-1.4')
+        nltk.download("wordnet")
+        nltk.download("omw-1.4")
 
         super().__init__(*args, **kwargs)
 
-    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str],
-                     alpha: float = 0.9,  beta: float = 3, gamma: float = 0.1) -> float:
+    def evaluate_str(self,
+                     expected_list: Sequence[str],
+                     actual_list: Sequence[str],
+                     alpha: float = 0.9,
+                     beta: float = 3,
+                     gamma: float = 0.1) -> float:
         from nltk.translate.meteor_score import meteor_score
 
         expected_list_tokenized = [item.split() for item in expected_list]
@@ -185,3 +187,48 @@ class METEOR(GenerativeEvaluator):
                       for expected, actual in zip(expected_list_tokenized, actual_list_tokenized)]
 
         return float(sum(all_scores) / len(all_scores))
+
+
+class JS_Divergence(GenerativeEvaluator):
+    """
+    Computes Jansen-Shannon divergence - used for paraphrases evaluation.
+    """
+
+    def KL_divergence(self, p: List[float], q: List[float]) -> float:
+        return sum([p_i * np.log2((p_i) / (q_i)) for p_i, q_i in zip(p, q) if q_i != 0])
+
+    def JS_divergence(self,
+                      probs_real: List[float],
+                      probs_model: List[float],
+                      base: Optional[float] = 2) -> float:
+        if base is not None and base <= 0:
+            raise ValueError("`base` must be a positive number or `None`.")
+        probs_joined = [(prob_r + prob_m) / 2 for prob_r, prob_m in zip(probs_real, probs_model)]
+        return (self.KL_divergence(probs_real, probs_joined) + self.KL_divergence(probs_model, probs_joined)) / \
+               (2 * np.log2(base))
+
+    def evaluate_str(self,
+                     expected_list: Sequence[str],
+                     actual_list: Sequence[str],
+                     use_metric: GenerativeEvaluator = PRISM(use_cuda=False, language="en", probability=True)
+                     ) -> float:
+
+        if len(expected_list) != len(actual_list):
+            raise ValueError("Lists for evaluation are not the same size!")
+
+        _probs_real = [use_metric.evaluate_str([expected], [expected]) for expected in expected_list]
+        _probs_model = [use_metric.evaluate_str([expected], [actual])
+                        for expected, actual in zip(expected_list, actual_list)]
+        is_prob: bool = all(0 <= prob <= 1 for prob in _probs_model) and all(0 <= prob <= 1 for prob in _probs_real)
+        is_percentage: bool = (all(0 <= prob <= 100 for prob in _probs_model)
+                               and all(0 <= prob <= 100 for prob in _probs_real) and not is_prob)
+        if is_prob:
+            divergence = self.JS_divergence(_probs_real, _probs_model, base=2)
+        elif is_percentage:
+            divergence = self.JS_divergence([prob * 0.01 for prob in _probs_real],
+                                            [prob * 0.01 for prob in _probs_model],
+                                            base=2)
+        else:
+            raise ValueError("Evaluator %s can only be used with evaluators returning probabilities or percentages.",
+                             self)
+        return divergence
