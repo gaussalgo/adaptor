@@ -243,6 +243,9 @@ class METEOR(GenerativeEvaluator):
 
 
 class JS_DIVERGENCE(GenerativeEvaluator):
+    """
+    Computes Jansen-Shannon divergence - used for paraphrases evaluation.
+    """
     def KL_divergence(self, p: List[float], q: List[float]) -> float:
         return sum([p_i * np.log2((p_i) / (q_i)) for p_i, q_i in zip(p, q) if q_i != 0])
 

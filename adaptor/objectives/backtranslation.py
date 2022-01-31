@@ -38,6 +38,14 @@ class BackTranslator(torch.nn.Module):
         tokenizer: AutoTokenizer,
         model: torch.nn.Module,
     ) -> str:
+        """
+        Translation of for one input text given the translation model and tokenizer.
+        Results are cached for faster Backtranslation
+        :param text: text to be translated.
+        :param tokenizer: corresponding tokenizer.
+        :param model: corresponding translation model.
+        :return: translated text.
+        """
         inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
         output = (
             model.generate(
@@ -128,4 +136,7 @@ class BackTranslation(Sequence2SequenceMixin, UnsupervisedObjective):
             yield self._construct_batch(targets_batch)
 
     def cache_info(self) -> _CacheInfo:
+        """
+        Returns cache information for translations.
+        """
         return self.translator._translate_one.cache_info()
