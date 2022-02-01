@@ -64,6 +64,7 @@ def test_mt_adaptation():
 
     run_adaptation(adapter)
 
+
 def test_mt_adaptation_bt():
     lang_module = LangModule(test_base_models["translation"])
     translator = BackTranslator("Helsinki-NLP/opus-mt-en-cs")
