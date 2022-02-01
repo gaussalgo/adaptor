@@ -1,6 +1,7 @@
 from adaptor.adapter import Adapter
 from adaptor.lang_module import LangModule
 from adaptor.objectives.MLM import MaskedLanguageModeling
+from adaptor.objectives.backtranslation import BackTranslation, BackTranslator
 from adaptor.objectives.classification import TokenClassification
 from adaptor.objectives.denoising import DenoisingObjective
 from adaptor.objectives.seq2seq import Sequence2Sequence
@@ -49,6 +50,29 @@ def test_mt_adaptation():
             DenoisingObjective(lang_module,
                                texts_or_path=paths["texts"]["unsup"],
                                batch_size=1),
+            Sequence2Sequence(lang_module,
+                              texts_or_path=paths["texts"]["translation"],
+                              labels_or_path=paths["labels"]["translation"],
+                              batch_size=1,
+                              source_lang_id="en",
+                              target_lang_id="cs")
+    ]
+
+    schedule = SequentialSchedule(objectives, training_arguments)
+
+    adapter = Adapter(lang_module, schedule, args=training_arguments)
+
+    run_adaptation(adapter)
+
+
+def test_mt_adaptation_bt():
+    lang_module = LangModule(test_base_models["translation"])
+    translator = BackTranslator("Helsinki-NLP/opus-mt-cs-en")
+    objectives = [
+            BackTranslation(lang_module,
+                            back_translator=translator,
+                            texts_or_path=paths["texts"]["unsup"],
+                            batch_size=4),
             Sequence2Sequence(lang_module,
                               texts_or_path=paths["texts"]["translation"],
                               labels_or_path=paths["labels"]["translation"],

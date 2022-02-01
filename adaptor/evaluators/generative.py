@@ -197,10 +197,7 @@ class JS_Divergence(GenerativeEvaluator):
     def KL_divergence(self, p: List[float], q: List[float]) -> float:
         return sum([p_i * np.log2((p_i) / (q_i)) for p_i, q_i in zip(p, q) if q_i != 0])
 
-    def JS_divergence(self,
-                      probs_real: List[float],
-                      probs_model: List[float],
-                      base: Optional[float] = 2) -> float:
+    def JS_divergence(self, probs_real: List[float], probs_model: List[float], base: Optional[float] = 2) -> float:
         if base is not None and base <= 0:
             raise ValueError("`base` must be a positive number or `None`.")
         probs_joined = [(prob_r + prob_m) / 2 for prob_r, prob_m in zip(probs_real, probs_model)]
@@ -208,17 +205,15 @@ class JS_Divergence(GenerativeEvaluator):
         return (self.KL_divergence(probs_real, probs_joined) + self.KL_divergence(probs_model, probs_joined)) / \
                (2 * np.log2(base))
 
-    def evaluate_str(self,
-                     expected_list: Sequence[str],
-                     actual_list: Sequence[str],
-                     use_metric: GenerativeEvaluator = PRISM(use_cuda=False, language="en", probability=True)
-                     ) -> float:
+    def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+        # we use PRISM for paraphrase evaluation by default
+        metric = PRISM(use_cuda=False, language="en", probability=True)
 
         if len(expected_list) != len(actual_list):
             raise ValueError("Lists for evaluation are not the same size!")
 
-        _probs_real = [use_metric.evaluate_str([expected], [expected]) for expected in expected_list]
-        _probs_model = [use_metric.evaluate_str([expected], [actual])
+        _probs_real = [metric.evaluate_str([expected], [expected]) for expected in expected_list]
+        _probs_model = [metric.evaluate_str([expected], [actual])
                         for expected, actual in zip(expected_list, actual_list)]
         is_prob: bool = all(0 <= prob <= 1 for prob in _probs_model) and all(0 <= prob <= 1 for prob in _probs_real)
         is_percentage: bool = (all(0 <= prob <= 100 for prob in _probs_model)
