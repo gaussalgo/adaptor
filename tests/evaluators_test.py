@@ -53,10 +53,6 @@ def test_bertscore():
     assert_gen_evaluator_logs(BERTScore(use_generate=False, decides_convergence=True), "train")
 
 
-def test_meteor():
-    assert_gen_evaluator_logs(METEOR(decides_convergence=True), "train")
-
-
 def test_prism():
     """
     PRISM downloads relatively big model, we omit that by default.
@@ -65,9 +61,5 @@ def test_prism():
     # assert_gen_evaluator_logs(PRISM(use_cuda=False, language="en", decides_convergence=True), "train")
 
 
-def test_divergence():
-    """
-    Default JS_Divergence uses PRISM - note that this test will download PRISM model
-    """
-    # from adaptor.evaluators.generative import JS_Divergence
-    # assert_gen_evaluator_logs(JS_Divergence(decides_convergence=True), "train")
+def test_meteor():
+    assert_gen_evaluator_logs(METEOR(decides_convergence=True), "train")

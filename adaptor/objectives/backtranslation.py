@@ -1,4 +1,3 @@
-from functools import lru_cache, _CacheInfo
 import logging
 from typing import List, Iterator, Iterable, Optional
 
@@ -23,30 +22,17 @@ class BackTranslator(torch.nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.translator = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path).to(self.device)
 
-    @staticmethod
-    @lru_cache(maxsize=10000, typed=False)
-    def _translate_one(text: str, tokenizer: AutoTokenizer, model: torch.nn.Module) -> str:
-        """
-        Translation of for one input text given the translation model and tokenizer.
-        Results are cached for faster Backtranslation
-        :param text: text to be translated.
-        :param tokenizer: corresponding tokenizer.
-        :param model: corresponding translation model.
-        :return: translated text.
-        """
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-        output = model.generate(input_ids=inputs["input_ids"],
-                                attention_mask=inputs["attention_mask"]).detach().cpu()
-
-        return tokenizer.decode(*output, skip_special_tokens=True)
-
     def translate(self, texts: List[str]) -> List[str]:
         """
         Translates input texts using the given translation model.
         :param texts: texts to be translated.
         :return: translated texts.
         """
-        translations = [self._translate_one(text, self.tokenizer, self.translator) for text in texts]
+
+        inputs = self.tokenizer(texts, return_tensors="pt", truncation=True, padding=True)
+        outputs = self.translator.generate(**inputs.to(self.device))
+        translations = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+
         return translations
 
 
@@ -100,9 +86,3 @@ class BackTranslation(Sequence2SequenceMixin, UnsupervisedObjective):
         if targets_batch:
             # yield last nonempty residual batch
             yield self._construct_batch(targets_batch)
-
-    def cache_info(self) -> _CacheInfo:
-        """
-        Returns cache information for translations.
-        """
-        return self.translator._translate_one.cache_info()

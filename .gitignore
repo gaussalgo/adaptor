@@ -1,9 +1,7 @@
-.venv/
+venv/
 **/__pycache__/
-adaptor.egg-info/
-examples/adaptation_output_dir
-tests/adaptation_output_dir
-tests/translator_model
+domain_adaptation.egg-info/
+examples/adapation_output_dir
 entity_detector_model/
 bin/
 lib/
