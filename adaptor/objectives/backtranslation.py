@@ -3,7 +3,7 @@ import logging
 from typing import List, Iterator, Iterable, Optional
 
 import torch
-from transformers import DataCollatorForSeq2Seq, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import DataCollatorForSeq2Seq, AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizer
 
 from .seq2seq import Sequence2SequenceMixin
 from ..objectives.objective_base import UnsupervisedObjective
@@ -26,7 +26,7 @@ class BackTranslator(torch.nn.Module):
 
     @staticmethod
     @lru_cache(maxsize=10000, typed=False)
-    def _translate_one(text: str, tokenizer: AutoTokenizer, model: torch.nn.Module) -> str:
+    def _translate_one(text: str, tokenizer: PreTrainedTokenizer, model: torch.nn.Module) -> str:
         """
         Translation of for one input text given the translation model and tokenizer.
         Results are cached for faster Backtranslation
@@ -35,7 +35,7 @@ class BackTranslator(torch.nn.Module):
         :param model: corresponding translation model.
         :return: translated text.
         """
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+        inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(model.device)
         output = model.generate(input_ids=inputs["input_ids"],
                                 attention_mask=inputs["attention_mask"]).detach().cpu()
 
