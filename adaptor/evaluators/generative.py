@@ -204,6 +204,7 @@ class JS_Divergence(GenerativeEvaluator):
         if base is not None and base <= 0:
             raise ValueError("`base` must be a positive number or `None`.")
         probs_joined = [(prob_r + prob_m) / 2 for prob_r, prob_m in zip(probs_real, probs_model)]
+
         return (self.KL_divergence(probs_real, probs_joined) + self.KL_divergence(probs_model, probs_joined)) / \
                (2 * np.log2(base))
 

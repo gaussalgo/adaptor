@@ -18,6 +18,7 @@ class BackTranslator(torch.nn.Module):
 
     def __init__(self, model_name_or_path: str, device: Optional[str] = None):
         super().__init__()
+
         self.device = device if device is not None else "cuda" if torch.cuda.is_available() else "cpu"
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
