@@ -3,9 +3,9 @@ import logging
 from typing import List, Iterator, Iterable, Optional
 
 import torch
-from transformers import DataCollatorForSeq2Seq, AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizer
 
-from .seq2seq import TranslationBase
+from .seq2seq import Sequence2SequenceMixin
 from ..objectives.objective_base import UnsupervisedObjective
 
 logger = logging.getLogger()
@@ -51,7 +51,7 @@ class BackTranslator(torch.nn.Module):
         return translations
 
 
-class BackTranslation(TranslationBase, UnsupervisedObjective):
+class BackTranslation(Sequence2SequenceMixin, UnsupervisedObjective):
     """
     BackTranslation Objective can be used for unsupervised adaptation of translator to *Target* domain.
     """
@@ -64,7 +64,6 @@ class BackTranslation(TranslationBase, UnsupervisedObjective):
         logger.warning("%s expects target-language texts as input_texts_or_path. This is not further checked. " % self)
 
         self.translator = back_translator
-        self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model)
 
     def _construct_batch(self, target_texts_batch: List[str]):
         translated_source_texts = self.translator.translate(target_texts_batch)

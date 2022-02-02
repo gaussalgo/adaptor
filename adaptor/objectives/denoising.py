@@ -4,7 +4,7 @@ import itertools
 import random
 from typing import List, Tuple, Optional, Iterator
 
-from transformers import DataCollatorForSeq2Seq, BatchEncoding
+from transformers import BatchEncoding
 
 from .seq2seq import Sequence2SequenceMixin
 from ..objectives.objective_base import UnsupervisedObjective
@@ -135,8 +135,6 @@ class DenoisingObjective(Sequence2SequenceMixin, UnsupervisedObjective):
             self.noising_strategies = noising_strategies
 
         self.noising_per_sentence = noising_per_sentence
-
-        self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
 
     def _apply_noise(self, text: str) -> str:
         """
