@@ -105,7 +105,9 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
         return head_module
 
 
-class TranslationBase(Sequence2SequenceMixin):
+class TranslationBase(Sequence2SequenceMixin, abc.ABC):
+
+    collator: Callable[[List[Dict[str, torch.FloatTensor]]], List[Dict[str, torch.FloatTensor]]]
 
     def __init__(self,
                  *args,
@@ -121,8 +123,6 @@ class TranslationBase(Sequence2SequenceMixin):
         # if it does not, this will just set unused attribute of tokenizer
         self.tokenizer.src_lang = source_lang_id
         self.tokenizer.tgt_lang = target_lang_id
-
-        self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model)
 
 
 class Sequence2Sequence(TranslationBase, SupervisedObjective):
