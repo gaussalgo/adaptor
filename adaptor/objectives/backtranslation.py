@@ -5,7 +5,7 @@ from typing import List, Iterator, Iterable, Optional
 import torch
 from transformers import DataCollatorForSeq2Seq, AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizer
 
-from .seq2seq import Sequence2Sequence
+from .seq2seq import TranslationBase
 from ..objectives.objective_base import UnsupervisedObjective
 
 logger = logging.getLogger()
@@ -51,7 +51,7 @@ class BackTranslator(torch.nn.Module):
         return translations
 
 
-class BackTranslation(Sequence2Sequence, UnsupervisedObjective):
+class BackTranslation(TranslationBase, UnsupervisedObjective):
     """
     BackTranslation Objective can be used for unsupervised adaptation of translator to *Target* domain.
     """

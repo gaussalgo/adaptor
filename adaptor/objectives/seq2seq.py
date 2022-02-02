@@ -104,6 +104,7 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
 
         return head_module
 
+
 class TranslationBase(Sequence2SequenceMixin):
 
     def __init__(self,
@@ -124,21 +125,13 @@ class TranslationBase(Sequence2SequenceMixin):
         self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model)
 
 
-class Sequence2Sequence(Sequence2SequenceMixin, SupervisedObjective):
+class Sequence2Sequence(TranslationBase, SupervisedObjective):
 
     def __init__(self,
                  *args,
-                 source_lang_id: Optional[str] = None,
-                 target_lang_id: Optional[str] = None,
                  **kwargs):
         """
         Refer to the documentation of superclass.
         """
         super().__init__(*args, **kwargs)
-
-        # if this is translation objective, tokenization of source and target might vary (can include lang_token_id)
-        # if it does not, this will just set unused attribute of tokenizer
-        self.tokenizer.src_lang = source_lang_id
-        self.tokenizer.tgt_lang = target_lang_id
-
         self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
