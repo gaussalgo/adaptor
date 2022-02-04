@@ -61,7 +61,10 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
     compatible_head: Head = Head.SEQ2SEQ
     collator: Callable[[List[Dict[str, torch.FloatTensor]]], List[Dict[str, torch.FloatTensor]]]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args,
+                 source_lang_id: Optional[str] = None,
+                 target_lang_id: Optional[str] = None,
+                 **kwargs):
         """
         Refer to the documentation of superclass.
         """
@@ -73,6 +76,12 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
             kwargs["max_samples_per_eval_log"] = 100
 
         super().__init__(*args, **kwargs)
+
+        # if this is translation objective, tokenization of source and target might vary (can include lang_token_id)
+        # if it does not, this will just set unused attribute of tokenizer
+        self.tokenizer.src_lang = source_lang_id
+        self.tokenizer.tgt_lang = target_lang_id
+        self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
 
     def _compute_loss(self, lm_logit_outputs: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
         """
@@ -107,19 +116,4 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
 
 class Sequence2Sequence(Sequence2SequenceMixin, SupervisedObjective):
 
-    def __init__(self,
-                 *args,
-                 source_lang_id: Optional[str] = None,
-                 target_lang_id: Optional[str] = None,
-                 **kwargs):
-        """
-        Refer to the documentation of superclass.
-        """
-        super().__init__(*args, **kwargs)
-
-        # if this is translation objective, tokenization of source and target might vary (can include lang_token_id)
-        # if it does not, this will just set unused attribute of tokenizer
-        self.tokenizer.src_lang = source_lang_id
-        self.tokenizer.tgt_lang = target_lang_id
-
-        self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
+    pass
