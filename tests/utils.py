@@ -17,7 +17,7 @@ paths = {
 test_base_models = {
     "translation_mono": "Helsinki-NLP/opus-mt-en-cs",
     "translation_multi": {
-            "model":"sshleifer/tiny-mbart",
+            "model": "sshleifer/tiny-mbart",
             "test_src_lang": "en_XX",
             "test_tgt_lang": "cs_CZ"},
     "token_classification": "bert-base-multilingual-cased"}

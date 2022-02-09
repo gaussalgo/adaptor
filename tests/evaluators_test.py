@@ -26,6 +26,7 @@ def assert_evaluator_logs(lang_module: LangModule, objective: Objective, split: 
 gen_lang_module = LangModule(test_base_models["translation_mono"])
 gen_lang_module_multi = LangModule(test_base_models["translation_multi"]["model"])
 
+
 def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> None:
     global gen_lang_module
 

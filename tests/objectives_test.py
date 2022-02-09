@@ -85,6 +85,7 @@ def test_backtranslation_objective():
 
     assert_module_objective_ok(lang_module, objective)
 
+
 def test_backtranslation_objective_mbart():
     # we are adapting cs->en translator with back-translation
     lang_module = LangModule(test_base_models["translation_multi"]["model"])

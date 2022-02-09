@@ -57,7 +57,8 @@ def test_adaptation_translation():
     # (optional) pick train and validation evaluators for the objectives
     seq2seq_evaluators = [BLEU(use_generate=True, decides_convergence=True)]
 
-    # 2. pick objectives - we use BART's objective for adaptation and mBART's seq2seq objective for fine-tuning - #TODO old comments
+    # 2. pick objectives - we use BART's objective for adaptation and mBART's seq2seq objective for fine-tuning
+    # TODO old comments
     objectives = [BackTranslation(lang_module,
                                   back_translator=BackTranslator("Helsinki-NLP/opus-mt-cs-en"),
                                   batch_size=1,
