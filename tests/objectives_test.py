@@ -85,6 +85,20 @@ def test_backtranslation_objective():
 
     assert_module_objective_ok(lang_module, objective)
 
+def test_backtranslation_objective_mbart():
+    # we are adapting cs->en translator with back-translation
+    lang_module = LangModule(test_base_models["translation_multi"]["model"])
+    translator = BackTranslator("Helsinki-NLP/opus-mt-en-cs")
+
+    objective = BackTranslation(lang_module,
+                                back_translator=translator,
+                                texts_or_path=paths["texts"]["unsup"],
+                                batch_size=4,
+                                source_lang_id=test_base_models["translation_multi"]["test_src_lang"],
+                                target_lang_id=test_base_models["translation_multi"]["test_tgt_lang"])
+
+    assert_module_objective_ok(lang_module, objective)
+
 
 def test_supervised_seq2seq_objective():
     lang_module = LangModule(test_base_models["translation_mono"])
@@ -92,5 +106,19 @@ def test_supervised_seq2seq_objective():
                                   texts_or_path=paths["texts"]["translation"],
                                   labels_or_path=paths["labels"]["translation"],
                                   batch_size=4)
+
+    assert_module_objective_ok(lang_module, objective)
+
+
+def test_supervised_seq2seq_objective_mbart():
+    # we are adapting cs->en translator with back-translation
+    lang_module = LangModule(test_base_models["translation_multi"]["model"])
+
+    objective = Sequence2Sequence(lang_module,
+                                  texts_or_path=paths["texts"]["translation"],
+                                  labels_or_path=paths["labels"]["translation"],
+                                  batch_size=4,
+                                  source_lang_id=test_base_models["translation_multi"]["test_src_lang"],
+                                  target_lang_id=test_base_models["translation_multi"]["test_tgt_lang"])
 
     assert_module_objective_ok(lang_module, objective)
