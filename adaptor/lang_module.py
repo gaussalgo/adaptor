@@ -1,10 +1,11 @@
 import logging
-from typing import List, Dict, Any, Optional
+import os
+from typing import List, Dict, Any, Optional, Union, Type
 
 import torch
 from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForSequenceClassification, \
     AutoModelForTokenClassification, AutoModelForSeq2SeqLM, AutoModelForCausalLM, \
-    AutoModelForMaskedLM
+    AutoModelForMaskedLM, PretrainedConfig
 
 from .utils import Head
 
@@ -34,6 +35,40 @@ class LangModule(torch.nn.Module):
         # head_kwargs = head_kwargs if head_kwargs is not None else [{}] * len(head_types)
         # self._load_pretrained_with_heads(model_name_or_path, head_types, head_kwargs)
         self.trainable_models = torch.nn.ModuleDict()
+
+    @staticmethod
+    def from_data(texts_or_path: Union[str, List[str]],
+                  tokenizer_type: str,
+                  model_dir: str,
+                  vocab_size: int,
+                  tokenizer_hf_class: Type[PreTrainedTokenizer] = None,
+                  model_type: Optional[str] = None,
+                  model_config: Optional[PretrainedConfig] = None,
+                  config_kwargs: Optional[Dict[str, Any]] = (),
+                  tokenizer_kwargs: Optional[Dict[str, Any]] = (),
+                  model_kwargs: Optional[Dict[str, Any]] = ()) -> "LangModule":
+        from . import new_module_utils as nm_utils
+
+        if model_type is None and model_config is None:
+            from transformers import CONFIG_MAPPING
+            raise ValueError("You must pass at least one of args from (model_type, model_config). "
+                             "Pre-configured HuggingFace model types: %s", list(CONFIG_MAPPING.keys()))
+
+        save_dir = os.path.join(model_dir, nm_utils.BASE_CHECKPOINT_NAME)
+
+        src_texts = nm_utils.texts_or_path_to_list(texts_or_path)
+
+        new_tokenizer, new_config = nm_utils.tokenizer_config_from_data(tokenizer_type, tokenizer_hf_class, model_type,
+                                                                        src_texts, vocab_size, save_dir,
+                                                                        tokenizer_kwargs, config_kwargs,
+                                                                        sentencepiece_kwargs={})
+        new_model = nm_utils.model_from_config(new_config, model_kwargs)
+        new_model.save_pretrained(save_dir)
+
+        constructed_module = LangModule(save_dir)
+        # without redeclaration, tokenizer class is repeatedly resolved from the attached config
+        constructed_module.tokenizer = new_tokenizer
+        return constructed_module
 
     @staticmethod
     def load_head(model_name_or_path: str,
@@ -117,8 +152,8 @@ class LangModule(torch.nn.Module):
                     # param present in the model to merge new_model into
                     new_model_param = getattr(new_model, new_param_key)
                     orig_model_param = getattr(orig_model, new_param_key)
-                    if orig_model_param.shape == new_model_param.shape and torch.all(
-                            orig_model_param == new_model_param):
+                    if orig_model_param.shape == new_model_param.shape and \
+                            torch.all(orig_model_param == new_model_param):  # type: ignore
                         setattr(new_model, new_param_key, orig_model_param)
                         assert id(getattr(orig_model, new_param_key)) == id(getattr(new_model, new_param_key))
         else:

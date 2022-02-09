@@ -84,7 +84,7 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
         # note that currently we do not ignore padding from the loss, which might be desirable
         # - we have seen this to eliminate repetitive generations at some cases
         loss_fct = torch.nn.CrossEntropyLoss()
-        lm_loss = loss_fct(lm_logit_outputs.view(-1, self.tokenizer.vocab_size), labels.view(-1))
+        lm_loss = loss_fct(lm_logit_outputs.view(-1, lm_logit_outputs.shape[-1]), labels.view(-1))
 
         return lm_loss
 

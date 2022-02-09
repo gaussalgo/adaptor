@@ -86,7 +86,7 @@ def test_backtranslation_objective():
     assert_module_objective_ok(lang_module, objective)
 
 
-def test_supervised_seq2seq_objective():
+def test_seq2seq_objective():
     lang_module = LangModule(test_base_models["translation"])
     objective = Sequence2Sequence(lang_module,
                                   texts_or_path=paths["texts"]["translation"],
@@ -94,5 +94,38 @@ def test_supervised_seq2seq_objective():
                                   batch_size=4,
                                   source_lang_id="cs",
                                   target_lang_id="en")
+
+    assert_module_objective_ok(lang_module, objective)
+
+
+def test_seq2seq_objective_from_scratch():
+    lang_module = LangModule.from_data(texts_or_path=paths["texts"]["translation"],
+                                       vocab_size=29,  # vocab_size(s) must comply with sentencepiece constraints
+                                       tokenizer_type="sentencepiece",
+                                       tokenizer_kwargs={"source_lang": "en", "target_lang": "cs"},
+                                       model_type="marian",
+                                       model_dir="adaptation_output_dir")
+
+    objective = Sequence2Sequence(lang_module,
+                                  texts_or_path=paths["texts"]["translation"],
+                                  labels_or_path=paths["labels"]["translation"],
+                                  batch_size=4,
+                                  source_lang_id="cs",
+                                  target_lang_id="en")
+
+    assert_module_objective_ok(lang_module, objective)
+
+
+def test_mlm_from_scratch():
+    lang_module = LangModule.from_data(texts_or_path=paths["texts"]["unsup"],
+                                       vocab_size=29,  # vocab_size(s) must comply with sentencepiece constraints
+                                       tokenizer_type="sentencepiece",
+                                       tokenizer_kwargs={"source_lang": "en", "target_lang": "cs"},
+                                       model_type="bert",
+                                       model_dir="adaptation_output_dir")
+
+    objective = MaskedLanguageModeling(lang_module,
+                                       texts_or_path=paths["texts"]["unsup"],
+                                       batch_size=4)
 
     assert_module_objective_ok(lang_module, objective)
