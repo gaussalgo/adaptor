@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Dict, Union, Any, Optional, Type, Tuple
+from typing import List, Dict, Union, Any, Type, Tuple, Optional
 
 from transformers import PreTrainedTokenizer, PreTrainedModel, PretrainedConfig, CONFIG_MAPPING, AutoModel, \
     AutoTokenizer
@@ -13,7 +13,6 @@ _DEFAULT_SPECIAL_TOKEN_KEYS = ("bos", "eos", "unk", "sep", "pad", "cls", "mask")
 DEFAULT_SPECIAL_VOCAB_NAMES = {t + "_token": "<%s>" % t for t in _DEFAULT_SPECIAL_TOKEN_KEYS}
 DEFAULT_SPECIAL_VOCAB_IDS = {t + "_token_id": idx for idx, t in enumerate(_DEFAULT_SPECIAL_TOKEN_KEYS)}
 DEFAULT_SPECIAL_VOCAB = {"<%s>" % t: idx for idx, t in enumerate(_DEFAULT_SPECIAL_TOKEN_KEYS)}
-
 
 logger = logging.getLogger()
 
@@ -37,10 +36,14 @@ def tokenizer_config_from_data(tokenizer_type: str,
                                texts: List[str],
                                vocab_size: int,
                                save_tokenizer_dir: str,
-                               tokenizer_kwargs: Dict[str, Any] = (),
-                               config_kwargs: Dict[str, Any] = (),
-                               sentencepiece_kwargs: Dict[str, Any] = ()) -> Tuple[PreTrainedTokenizer,
-                                                                                   PretrainedConfig]:
+                               tokenizer_kwargs: Optional[Dict[str, Any]] = None,
+                               config_kwargs: Optional[Dict[str, Any]] = None,
+                               sentencepiece_kwargs: Optional[Dict[str, Any]] = None
+                               ) -> Tuple[PreTrainedTokenizer, PretrainedConfig]:
+    tokenizer_kwargs = tokenizer_kwargs if tokenizer_kwargs is not None else {}
+    config_kwargs = config_kwargs if config_kwargs is not None else {}
+    sentencepiece_kwargs = sentencepiece_kwargs if sentencepiece_kwargs is not None else {}
+
     if tokenizer_type == "sentencepiece":
         import sentencepiece as spm
 
@@ -98,8 +101,10 @@ def tokenizer_config_from_data(tokenizer_type: str,
     return new_tokenizer, new_config
 
 
-def model_from_config(config: PretrainedConfig, model_kwargs: Dict[str, Any] = ()) -> PreTrainedModel:
-    model = AutoModel.from_config(config, **dict(model_kwargs))
+def model_from_config(config: PretrainedConfig, model_kwargs: Optional[Dict[str, Any]] = None) -> PreTrainedModel:
+    model_kwargs = model_kwargs if model_kwargs is not None else {}
+
+    model = AutoModel.from_config(config, **model_kwargs)
     model.resize_token_embeddings(config.vocab_size)
     return model
 
@@ -107,6 +112,6 @@ def model_from_config(config: PretrainedConfig, model_kwargs: Dict[str, Any] = (
 def texts_or_path_to_list(texts_or_path: Union[str, List[str]]) -> List[str]:
     if isinstance(texts_or_path, str):
         with open(texts_or_path) as src_f:
-            return [l.strip() for l in src_f.readlines()]
+            return [line.strip() for line in src_f.readlines()]
     else:
         return texts_or_path

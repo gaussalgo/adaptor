@@ -41,12 +41,12 @@ class LangModule(torch.nn.Module):
                   tokenizer_type: str,
                   model_dir: str,
                   vocab_size: int,
-                  tokenizer_hf_class: Type[PreTrainedTokenizer] = None,
+                  tokenizer_hf_class: Optional[Type[PreTrainedTokenizer]] = None,
                   model_type: Optional[str] = None,
                   model_config: Optional[PretrainedConfig] = None,
-                  config_kwargs: Optional[Dict[str, Any]] = (),
-                  tokenizer_kwargs: Optional[Dict[str, Any]] = (),
-                  model_kwargs: Optional[Dict[str, Any]] = ()) -> "LangModule":
+                  config_kwargs: Optional[Dict[str, Any]] = None,
+                  tokenizer_kwargs: Optional[Dict[str, Any]] = None,
+                  model_kwargs: Optional[Dict[str, Any]] = None) -> "LangModule":
         from . import new_module_utils as nm_utils
 
         if model_type is None and model_config is None:
