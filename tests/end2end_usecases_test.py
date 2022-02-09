@@ -52,12 +52,12 @@ def test_adaptation_ner():
 
 def test_adaptation_translation():
     # 1. pick the models - randomly pre-initialize the appropriate heads
-    lang_module = LangModule(test_base_models["translation"])
+    lang_module = LangModule(test_base_models["translation_mono"])
 
     # (optional) pick train and validation evaluators for the objectives
     seq2seq_evaluators = [BLEU(use_generate=True, decides_convergence=True)]
 
-    # 2. pick objectives - we use BART's objective for adaptation and mBART's seq2seq objective for fine-tuning
+    # 2. pick objectives - we use BART's objective for adaptation and mBART's seq2seq objective for fine-tuning - #TODO old comments
     objectives = [BackTranslation(lang_module,
                                   back_translator=BackTranslator("Helsinki-NLP/opus-mt-cs-en"),
                                   batch_size=1,
@@ -65,8 +65,7 @@ def test_adaptation_translation():
                   Sequence2Sequence(lang_module, batch_size=1,
                                     texts_or_path=paths["texts"]["translation"],
                                     val_evaluators=seq2seq_evaluators,
-                                    labels_or_path=paths["labels"]["translation"],
-                                    source_lang_id="en", target_lang_id="cs")]
+                                    labels_or_path=paths["labels"]["translation"])]
     # 3. pick a schedule of the selected objectives
     # this one will shuffle the batches of both objectives
     schedule = ParallelSchedule(objectives, training_arguments)

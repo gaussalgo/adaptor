@@ -58,7 +58,7 @@ def test_clm_unsup_objective_bert():
 
 
 def test_clm_unsup_objective_marian():
-    lang_module = LangModule(test_base_models["translation"])
+    lang_module = LangModule(test_base_models["translation_mono"])
     objective = CausalLanguageModeling(lang_module,
                                        texts_or_path=paths["texts"]["unsup"],
                                        batch_size=4)
@@ -67,7 +67,7 @@ def test_clm_unsup_objective_marian():
 
 
 def test_denoising_objective():
-    lang_module = LangModule(test_base_models["translation"])
+    lang_module = LangModule(test_base_models["translation_mono"])
     objective = DenoisingObjective(lang_module, texts_or_path=paths["texts"]["unsup"], batch_size=4)
 
     assert_module_objective_ok(lang_module, objective)
@@ -75,24 +75,22 @@ def test_denoising_objective():
 
 def test_backtranslation_objective():
     # we are adapting cs->en translator with back-translation
-    lang_module = LangModule(test_base_models["translation"])
+    lang_module = LangModule(test_base_models["translation_mono"])
     translator = BackTranslator("Helsinki-NLP/opus-mt-en-cs")
 
     objective = BackTranslation(lang_module,
                                 back_translator=translator,
                                 texts_or_path=paths["texts"]["unsup"],
-                                batch_size=4)
+                                batch_size=4,)
 
     assert_module_objective_ok(lang_module, objective)
 
 
 def test_supervised_seq2seq_objective():
-    lang_module = LangModule(test_base_models["translation"])
+    lang_module = LangModule(test_base_models["translation_mono"])
     objective = Sequence2Sequence(lang_module,
                                   texts_or_path=paths["texts"]["translation"],
                                   labels_or_path=paths["labels"]["translation"],
-                                  batch_size=4,
-                                  source_lang_id="cs",
-                                  target_lang_id="en")
+                                  batch_size=4)
 
     assert_module_objective_ok(lang_module, objective)

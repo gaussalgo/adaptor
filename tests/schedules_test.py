@@ -77,7 +77,7 @@ def test_ner_da_schedule_strided():
 
 
 def test_mt_da_schedule():
-    lang_module = LangModule(test_base_models["translation"])
+    lang_module = LangModule(test_base_models["translation_mono"])
     denoising_adaptation = DenoisingObjective(lang_module,
                                               texts_or_path=unsup_target_domain_texts,
                                               val_texts_or_path=unsup_target_domain_texts,
@@ -87,7 +87,6 @@ def test_mt_da_schedule():
                                        labels_or_path=sup_translation_texts_tgt,
                                        val_texts_or_path=sup_translation_texts_src,
                                        val_labels_or_path=sup_translation_texts_tgt,
-                                       source_lang_id="en",
-                                       target_lang_id="cs", batch_size=1)
+                                       batch_size=1)
 
     assert_schedule(lang_module, SequentialSchedule(objectives=[denoising_adaptation, clm_finetuning], args=args))

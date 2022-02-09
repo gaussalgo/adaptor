@@ -23,7 +23,7 @@ def assert_evaluator_logs(lang_module: LangModule, objective: Objective, split: 
     assert all(str(objective) in k for k in log.keys())
 
 
-gen_lang_module = LangModule(test_base_models["translation"])
+gen_lang_module = LangModule(test_base_models["translation_mono"])
 
 
 def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> None:
@@ -33,8 +33,6 @@ def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> Non
                                       texts_or_path=paths["texts"]["translation"],
                                       labels_or_path=paths["labels"]["translation"],
                                       batch_size=1,
-                                      source_lang_id="en",
-                                      target_lang_id="cs",
                                       train_evaluators=[evaluator],
                                       val_evaluators=[evaluator])
 

@@ -45,7 +45,7 @@ def test_ner_adaptation():
 
 
 def test_mt_adaptation():
-    lang_module = LangModule(test_base_models["translation"])
+    lang_module = LangModule(test_base_models["translation_mono"])
     objectives = [
             DenoisingObjective(lang_module,
                                texts_or_path=paths["texts"]["unsup"],
@@ -53,9 +53,7 @@ def test_mt_adaptation():
             Sequence2Sequence(lang_module,
                               texts_or_path=paths["texts"]["translation"],
                               labels_or_path=paths["labels"]["translation"],
-                              batch_size=1,
-                              source_lang_id="en",
-                              target_lang_id="cs")
+                              batch_size=1,)
     ]
 
     schedule = SequentialSchedule(objectives, training_arguments)
@@ -66,7 +64,7 @@ def test_mt_adaptation():
 
 
 def test_mt_adaptation_bt():
-    lang_module = LangModule(test_base_models["translation"])
+    lang_module = LangModule(test_base_models["translation_mono"])
     translator = BackTranslator("Helsinki-NLP/opus-mt-cs-en")
     objectives = [
             BackTranslation(lang_module,
@@ -76,9 +74,7 @@ def test_mt_adaptation_bt():
             Sequence2Sequence(lang_module,
                               texts_or_path=paths["texts"]["translation"],
                               labels_or_path=paths["labels"]["translation"],
-                              batch_size=1,
-                              source_lang_id="en",
-                              target_lang_id="cs")
+                              batch_size=1)
     ]
 
     schedule = SequentialSchedule(objectives, training_arguments)
