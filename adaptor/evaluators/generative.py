@@ -7,6 +7,7 @@ import torch
 from bert_score import BERTScorer
 from rouge_score import rouge_scorer
 from sacrebleu import corpus_bleu
+from tqdm import tqdm
 from transformers import PreTrainedTokenizer, BatchEncoding
 
 from .evaluator_base import EvaluatorBase
@@ -56,7 +57,7 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
         expected_str = []
         actual_str = []
 
-        for batch in dataset:
+        for batch in tqdm(dataset, desc="Generative evaluation: %s" % self):
             with torch.no_grad():
                 if self.use_generate:
                     output_tokens = self._autoregressive_predict(model, batch)
