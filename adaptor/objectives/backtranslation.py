@@ -3,7 +3,7 @@ import logging
 from typing import List, Iterator, Iterable, Optional
 
 import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizer, MBartTokenizer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizer, MBart50Tokenizer, MBartTokenizer
 
 from .seq2seq import Sequence2SequenceMixin
 from ..objectives.objective_base import UnsupervisedObjective
@@ -36,7 +36,12 @@ class BackTranslator(torch.nn.Module):
         :return: translated text.
         """
         inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(model.device)
-        if isinstance(tokenizer, MBartTokenizer):
+        if isinstance(tokenizer, MBart50Tokenizer):
+            output = model.generate(input_ids=inputs["input_ids"],
+                                    attention_mask=inputs["attention_mask"],
+                                    forced_bos_token_id=tokenizer.lang_code_to_id[tokenizer.tgt_lang]
+                                    ).detach().cpu()
+        elif isinstance(tokenizer, MBartTokenizer):
             output = model.generate(input_ids=inputs["input_ids"],
                                     attention_mask=inputs["attention_mask"],
                                     decoder_start_token_id=tokenizer.lang_code_to_id[tokenizer.tgt_lang]

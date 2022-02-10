@@ -7,7 +7,7 @@ import torch
 from bert_score import BERTScorer
 from rouge_score import rouge_scorer
 from sacrebleu import corpus_bleu
-from transformers import PreTrainedTokenizer, BatchEncoding, MBartTokenizer
+from transformers import PreTrainedTokenizer, BatchEncoding, MBart50Tokenizer, MBartTokenizer
 
 from .evaluator_base import EvaluatorBase
 from .prism import Prism
@@ -33,23 +33,27 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
     def _autoregressive_predict_one(input_ids: torch.LongTensor,
                                     attention_mask: torch.LongTensor,
                                     model: torch.nn.Module,
-                                    tgt_lang_id: Optional[int] = None) -> torch.LongTensor:
-        if tgt_lang_id is not None:
+                                    tokenizer: PreTrainedTokenizer) -> torch.LongTensor:
+        if isinstance(tokenizer, MBart50Tokenizer):
+            # Forced BOS token for MBart50
+            return model.generate(input_ids=input_ids, attention_mask=attention_mask,
+                                  forced_bos_token_id=tokenizer.lang_code_to_id[tokenizer.tgt_lang]).detach().cpu()
+        elif isinstance(tokenizer, MBartTokenizer):
             # Forced BOS token for MBart
             return model.generate(input_ids=input_ids, attention_mask=attention_mask,
-                                  decoder_start_token_id=tgt_lang_id).detach().cpu()
+                                  decoder_start_token_id=tokenizer.lang_code_to_id[tokenizer.tgt_lang]).detach().cpu()
         else:
             return model.generate(input_ids=input_ids, attention_mask=attention_mask).detach().cpu()
 
     def _autoregressive_predict(self,
                                 model: torch.nn.Module,
                                 inputs_batch: Dict[str, torch.LongTensor],
-                                tgt_lang_id: Optional[int] = None) -> Iterator[torch.LongTensor]:
+                                tokenizer: PreTrainedTokenizer) -> Iterator[torch.LongTensor]:
         assert hasattr(model, "generate"), "If Evaluator(use_generate=True), " \
                                            "evaluated model must have its generate() method."
 
         return self._autoregressive_predict_one(inputs_batch["input_ids"], inputs_batch["attention_mask"],
-                                                model, tgt_lang_id)
+                                                model, tokenizer)
 
     @staticmethod
     def _argmax_predict(model: torch.nn.Module,
@@ -67,12 +71,7 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
         for batch in dataset:
             with torch.no_grad():
                 if self.use_generate:
-                    if hasattr(tokenizer, "tgt_lang") and isinstance(tokenizer, MBartTokenizer):
-                        # Only applied for MBart model
-                        output_tokens = self._autoregressive_predict(model, batch,
-                                                                     tokenizer.lang_code_to_id[tokenizer.tgt_lang])
-                    else:
-                        output_tokens = self._autoregressive_predict(model, batch)
+                    output_tokens = self._autoregressive_predict(model, batch, tokenizer)
                 else:
                     output_tokens = self._argmax_predict(model, batch)
             # replace -100 labels (excluded from the loss), otherwise encoded as unknown tokens
