@@ -3,7 +3,7 @@ import logging
 from typing import List, Iterator, Iterable, Optional
 
 import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizer, MBart50Tokenizer, MBartTokenizer
 
 from .seq2seq import Sequence2SequenceMixin
 from ..objectives.objective_base import UnsupervisedObjective
@@ -36,8 +36,19 @@ class BackTranslator(torch.nn.Module):
         :return: translated text.
         """
         inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(model.device)
-        output = model.generate(input_ids=inputs["input_ids"],
-                                attention_mask=inputs["attention_mask"]).detach().cpu()
+        if isinstance(tokenizer, MBart50Tokenizer):
+            output = model.generate(input_ids=inputs["input_ids"],
+                                    attention_mask=inputs["attention_mask"],
+                                    forced_bos_token_id=tokenizer.lang_code_to_id[tokenizer.tgt_lang]
+                                    ).detach().cpu()
+        elif isinstance(tokenizer, MBartTokenizer):
+            output = model.generate(input_ids=inputs["input_ids"],
+                                    attention_mask=inputs["attention_mask"],
+                                    decoder_start_token_id=tokenizer.lang_code_to_id[tokenizer.tgt_lang]
+                                    ).detach().cpu()
+        else:
+            output = model.generate(input_ids=inputs["input_ids"],
+                                    attention_mask=inputs["attention_mask"]).detach().cpu()
 
         return tokenizer.decode(*output, skip_special_tokens=True)
 
@@ -69,6 +80,8 @@ class BackTranslation(Sequence2SequenceMixin, UnsupervisedObjective):
         translated_source_texts = self.translator.translate(target_texts_batch)
         features_batch = []
         for src_text, tgt_text in zip(translated_source_texts, target_texts_batch):
+            self.tokenizer.src_lang = self.source_lang_id
+            self.tokenizer.tgt_lang = self.target_lang_id
             sample_features = self.tokenizer(src_text, truncation=True, padding="longest")
             with self.tokenizer.as_target_tokenizer():
                 sample_targets = self.tokenizer(tgt_text, truncation=True, padding="longest")
