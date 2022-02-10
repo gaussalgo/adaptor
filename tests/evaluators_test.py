@@ -23,7 +23,8 @@ def assert_evaluator_logs(lang_module: LangModule, objective: Objective, split: 
     assert all(str(objective) in k for k in log.keys())
 
 
-gen_lang_module = LangModule(test_base_models["translation"])
+gen_lang_module = LangModule(test_base_models["translation_mono"])
+gen_lang_module_multi = LangModule(test_base_models["translation_multi"]["model"])
 
 
 def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> None:
@@ -33,16 +34,33 @@ def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> Non
                                       texts_or_path=paths["texts"]["translation"],
                                       labels_or_path=paths["labels"]["translation"],
                                       batch_size=1,
-                                      source_lang_id="en",
-                                      target_lang_id="cs",
                                       train_evaluators=[evaluator],
                                       val_evaluators=[evaluator])
 
     assert_evaluator_logs(gen_lang_module, gen_objective, split)
 
 
+def assert_gen_evaluator_logs_mbart(evaluator: GenerativeEvaluator, split: str) -> None:
+    global gen_lang_module_multi
+
+    gen_objective = Sequence2Sequence(gen_lang_module_multi,
+                                      texts_or_path=paths["texts"]["translation"],
+                                      labels_or_path=paths["labels"]["translation"],
+                                      batch_size=1,
+                                      train_evaluators=[evaluator],
+                                      val_evaluators=[evaluator],
+                                      source_lang_id=test_base_models["translation_multi"]["test_src_lang"],
+                                      target_lang_id=test_base_models["translation_multi"]["test_tgt_lang"])
+
+    assert_evaluator_logs(gen_lang_module_multi, gen_objective, split)
+
+
 def test_bleu():
     assert_gen_evaluator_logs(BLEU(use_generate=True, decides_convergence=True), "train")
+
+
+def test_bleu_mbart():
+    assert_gen_evaluator_logs_mbart(BLEU(use_generate=True, decides_convergence=True), "train")
 
 
 def test_rouge():
