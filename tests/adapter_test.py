@@ -27,15 +27,13 @@ def run_adaptation(adapter: Adapter, trained_model_output_dir: str = "adaptation
 
 def test_ner_adaptation():
     lang_module = LangModule(test_base_models["token_classification"])
-    objectives = [
-            MaskedLanguageModeling(lang_module,
-                                   texts_or_path=paths["texts"]["unsup"],
-                                   batch_size=1),
-            TokenClassification(lang_module,
-                                texts_or_path=paths["texts"]["ner"],
-                                labels_or_path=paths["labels"]["ner"],
-                                batch_size=1)
-    ]
+    objectives = [MaskedLanguageModeling(lang_module,
+                                         texts_or_path=paths["texts"]["unsup"],
+                                         batch_size=1),
+                  TokenClassification(lang_module,
+                                      texts_or_path=paths["texts"]["ner"],
+                                      labels_or_path=paths["labels"]["ner"],
+                                      batch_size=1)]
 
     schedule = SequentialSchedule(objectives, training_arguments)
 
@@ -46,15 +44,13 @@ def test_ner_adaptation():
 
 def test_mt_adaptation():
     lang_module = LangModule(test_base_models["translation_mono"])
-    objectives = [
-            DenoisingObjective(lang_module,
-                               texts_or_path=paths["texts"]["unsup"],
-                               batch_size=1),
-            Sequence2Sequence(lang_module,
-                              texts_or_path=paths["texts"]["translation"],
-                              labels_or_path=paths["labels"]["translation"],
-                              batch_size=1,)
-    ]
+    objectives = [DenoisingObjective(lang_module,
+                                     texts_or_path=paths["texts"]["unsup"],
+                                     batch_size=1),
+                  Sequence2Sequence(lang_module,
+                                    texts_or_path=paths["texts"]["translation"],
+                                    labels_or_path=paths["labels"]["translation"],
+                                    batch_size=1)]
 
     schedule = SequentialSchedule(objectives, training_arguments)
 
@@ -66,16 +62,14 @@ def test_mt_adaptation():
 def test_mt_adaptation_bt():
     lang_module = LangModule(test_base_models["translation_mono"])
     translator = BackTranslator("Helsinki-NLP/opus-mt-cs-en")
-    objectives = [
-            BackTranslation(lang_module,
-                            back_translator=translator,
-                            texts_or_path=paths["texts"]["unsup"],
-                            batch_size=4),
-            Sequence2Sequence(lang_module,
-                              texts_or_path=paths["texts"]["translation"],
-                              labels_or_path=paths["labels"]["translation"],
-                              batch_size=1)
-    ]
+    objectives = [BackTranslation(lang_module,
+                                  back_translator=translator,
+                                  texts_or_path=paths["texts"]["unsup"],
+                                  batch_size=4),
+                  Sequence2Sequence(lang_module,
+                                    texts_or_path=paths["texts"]["translation"],
+                                    labels_or_path=paths["labels"]["translation"],
+                                    batch_size=1)]
 
     schedule = SequentialSchedule(objectives, training_arguments)
 

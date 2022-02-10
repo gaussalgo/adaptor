@@ -81,7 +81,7 @@ def test_backtranslation_objective():
     objective = BackTranslation(lang_module,
                                 back_translator=translator,
                                 texts_or_path=paths["texts"]["unsup"],
-                                batch_size=4,)
+                                batch_size=4)
 
     assert_module_objective_ok(lang_module, objective)
 

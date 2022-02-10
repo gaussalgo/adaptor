@@ -5,7 +5,7 @@ from adaptor.objectives.denoising import DenoisingObjective
 from adaptor.objectives.seq2seq import Sequence2Sequence
 from adaptor.schedules import SequentialSchedule, Schedule, ParallelSchedule
 from adaptor.utils import AdaptationArguments, StoppingStrategy
-from utils import test_base_models
+from utils import test_base_models, paths
 
 unsup_target_domain_texts = "mock_data/domain_unsup.txt"
 sup_target_domain_texts = "mock_data/supervised_texts.txt"
@@ -90,3 +90,44 @@ def test_mt_da_schedule():
                                        batch_size=1)
 
     assert_schedule(lang_module, SequentialSchedule(objectives=[denoising_adaptation, clm_finetuning], args=args))
+
+
+def test_mbart_multiobj_langs_match():
+    # we check that BoS tokens in objectives sharing the tokenizer are resolved correctly
+
+    lang_module = LangModule(test_base_models["translation_multi"]["model"])
+
+    objectives = [Sequence2Sequence(lang_module,
+                                    texts_or_path=paths["texts"]["translation"],
+                                    labels_or_path=paths["labels"]["translation"],
+                                    batch_size=1,
+                                    source_lang_id=test_base_models["translation_multi"]["test_src_lang"],
+                                    target_lang_id=test_base_models["translation_multi"]["test_tgt_lang"]),
+                  Sequence2Sequence(lang_module,
+                                    texts_or_path=paths["labels"]["translation"],
+                                    labels_or_path=paths["texts"]["translation"],
+                                    batch_size=1,
+                                    source_lang_id=test_base_models["translation_multi"]["test_tgt_lang"],
+                                    target_lang_id=test_base_models["translation_multi"]["test_src_lang"])]
+
+    schedule = ParallelSchedule(objectives, args=args)
+    dataset = iter(schedule.iterable_dataset("train"))
+
+    first_objective_batch = next(dataset)
+    second_objective_batch = next(dataset)
+
+    first_lang_token = lang_module.tokenizer.decode([t_id for t_id in first_objective_batch["input_ids"][0]
+                                                     if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
+    first_lang_label = lang_module.tokenizer.decode([t_id for t_id in first_objective_batch["labels"][0]
+                                                     if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
+
+    assert first_lang_token == test_base_models["translation_multi"]["test_src_lang"]
+    assert first_lang_label == test_base_models["translation_multi"]["test_tgt_lang"]
+
+    second_lang_token = lang_module.tokenizer.decode([t_id for t_id in second_objective_batch["input_ids"][0]
+                                                     if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
+    second_lang_label = lang_module.tokenizer.decode([t_id for t_id in second_objective_batch["labels"][0]
+                                                     if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
+
+    assert second_lang_token == test_base_models["translation_multi"]["test_tgt_lang"]
+    assert second_lang_label == test_base_models["translation_multi"]["test_src_lang"]
