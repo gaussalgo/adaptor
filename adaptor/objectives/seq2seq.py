@@ -12,6 +12,16 @@ from ..utils import Head
 class SequentialMixin(Objective, abc.ABC):
 
     collator: Callable[[List[Dict[str, torch.FloatTensor]]], List[Dict[str, torch.FloatTensor]]]
+    source_lang_id: Optional[str]
+    target_lang_id: Optional[str]
+
+    def __init__(self, *args,
+                 source_lang_id: Optional[str] = None,
+                 target_lang_id: Optional[str] = None,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        self.source_lang_id = source_lang_id
+        self.target_lang_id = target_lang_id
 
     def _get_seq2seq_collated_iterator(self,
                                        source_texts: Iterable[str],
@@ -24,14 +34,14 @@ class SequentialMixin(Objective, abc.ABC):
         :return: Iterator of encoded batches.
         """
         features_batch = []
-
+        self.tokenizer.src_lang = self.source_lang_id
+        self.tokenizer.tgt_lang = self.target_lang_id
         for source_text, target_text in zip(source_texts, target_texts):
 
             sample_features = self.tokenizer(source_text, truncation=True)
 
             with self.tokenizer.as_target_tokenizer():
                 sample_targets = self.tokenizer(target_text, truncation=True)
-
             features_batch.append({"input_ids": sample_features.input_ids,
                                    "attention_mask": sample_features.attention_mask,
                                    "labels": sample_targets.input_ids})
@@ -62,8 +72,6 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
     collator: Callable[[List[Dict[str, torch.FloatTensor]]], List[Dict[str, torch.FloatTensor]]]
 
     def __init__(self, *args,
-                 source_lang_id: Optional[str] = None,
-                 target_lang_id: Optional[str] = None,
                  **kwargs):
         """
         Refer to the documentation of superclass.
@@ -79,8 +87,6 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
 
         # if this is translation objective, tokenization of source and target might vary (can include lang_token_id)
         # if it does not, this will just set unused attribute of tokenizer
-        self.tokenizer.src_lang = source_lang_id
-        self.tokenizer.tgt_lang = target_lang_id
         self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
 
     def _compute_loss(self, lm_logit_outputs: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:

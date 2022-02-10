@@ -75,6 +75,8 @@ class BackTranslation(Sequence2SequenceMixin, UnsupervisedObjective):
         translated_source_texts = self.translator.translate(target_texts_batch)
         features_batch = []
         for src_text, tgt_text in zip(translated_source_texts, target_texts_batch):
+            self.tokenizer.src_lang = self.source_lang_id
+            self.tokenizer.tgt_lang = self.target_lang_id
             sample_features = self.tokenizer(src_text, truncation=True, padding="longest")
             with self.tokenizer.as_target_tokenizer():
                 sample_targets = self.tokenizer(tgt_text, truncation=True, padding="longest")
