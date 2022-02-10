@@ -34,10 +34,9 @@ class SequentialMixin(Objective, abc.ABC):
         :return: Iterator of encoded batches.
         """
         features_batch = []
-        self.tokenizer.src_lang = self.source_lang_id
-        self.tokenizer.tgt_lang = self.target_lang_id
         for source_text, target_text in zip(source_texts, target_texts):
-
+            self.tokenizer.src_lang = self.source_lang_id
+            self.tokenizer.tgt_lang = self.target_lang_id
             sample_features = self.tokenizer(source_text, truncation=True)
 
             with self.tokenizer.as_target_tokenizer():
