@@ -179,7 +179,7 @@ Such applications include for instance machine translation of non-canonical doma
 
 ### How can you contribute?
 
-See [CONTRIBUTING.md](https://github.com/gaussalgo/adaptor/blob/master/). 
+See [CONTRIBUTING.md](https://github.com/gaussalgo/adaptor/blob/master/CONTRIBUTING.md). 
 
 -------
 If you have any other question(s), feel free to create an issue.
