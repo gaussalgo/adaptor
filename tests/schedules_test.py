@@ -26,9 +26,7 @@ args = AdaptationArguments(output_dir="adaptation_output_dir",
 
 
 def assert_schedule(lang_module: LangModule, schedule: Schedule):
-
     for batch in iter(schedule.iterable_dataset("train")):
-
         logit_outputs = lang_module(**batch)
 
         loss_combined = schedule.compute_loss(logit_outputs, batch["labels"])
@@ -39,7 +37,6 @@ def assert_schedule(lang_module: LangModule, schedule: Schedule):
     assert all(any(str(obj) for log_key, _ in train_logs.items()) for obj in schedule.objectives["train"].keys())
 
     for batch in iter(schedule.iterable_dataset("eval")):
-
         logit_outputs = lang_module(**batch)
 
         loss_combined = schedule.compute_loss(logit_outputs, batch["labels"])
@@ -92,8 +89,8 @@ def test_mt_da_schedule():
     assert_schedule(lang_module, SequentialSchedule(objectives=[denoising_adaptation, clm_finetuning], args=args))
 
 
-def test_mbart_multiobj_langs_match():
-    # we check that BoS tokens in objectives sharing the tokenizer are resolved correctly
+def test_multilang_multiobj_langs_do_match():
+    # we check that BoS tokens in objectives (sharing the tokenizer) are resolved correctly, in both inputs and labels
 
     lang_module = LangModule(test_base_models["translation_multi"]["model"])
 
@@ -111,23 +108,13 @@ def test_mbart_multiobj_langs_match():
                                     target_lang_id=test_base_models["translation_multi"]["test_src_lang"])]
 
     schedule = ParallelSchedule(objectives, args=args)
-    dataset = iter(schedule.iterable_dataset("train"))
 
-    first_objective_batch = next(dataset)
-    second_objective_batch = next(dataset)
+    # we iterate over two batches, associated with objectives in the corresponding order
+    for objective, objective_batch in zip(objectives * 2, schedule.iterable_dataset("train")):
+        sample_input_lang = lang_module.tokenizer.decode([t_id for t_id in objective_batch["input_ids"][0]
+                                                          if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
+        sample_label_lang = lang_module.tokenizer.decode([t_id for t_id in objective_batch["labels"][0]
+                                                          if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
 
-    first_lang_token = lang_module.tokenizer.decode([t_id for t_id in first_objective_batch["input_ids"][0]
-                                                     if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
-    first_lang_label = lang_module.tokenizer.decode([t_id for t_id in first_objective_batch["labels"][0]
-                                                     if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
-
-    assert first_lang_token == test_base_models["translation_multi"]["test_src_lang"]
-    assert first_lang_label == test_base_models["translation_multi"]["test_tgt_lang"]
-
-    second_lang_token = lang_module.tokenizer.decode([t_id for t_id in second_objective_batch["input_ids"][0]
-                                                     if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
-    second_lang_label = lang_module.tokenizer.decode([t_id for t_id in second_objective_batch["labels"][0]
-                                                     if t_id in lang_module.tokenizer.lang_code_to_id.values()][0])
-
-    assert second_lang_token == test_base_models["translation_multi"]["test_tgt_lang"]
-    assert second_lang_label == test_base_models["translation_multi"]["test_src_lang"]
+        assert sample_input_lang == objective.source_lang_id
+        assert sample_label_lang == objective.target_lang_id
