@@ -30,7 +30,7 @@ class TokenClassification(SupervisedObjective):
             tokens = text.split()
             labels = text_labels.split()
 
-            tokenizer_encodings = self.tokenizer(text)
+            tokenizer_encodings = self.tokenizer(text, truncation=True)
             # attention mask is lang_module-specific
             attention_mask = tokenizer_encodings.attention_mask
             wpiece_ids = tokenizer_encodings.input_ids
