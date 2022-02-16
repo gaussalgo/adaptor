@@ -15,6 +15,15 @@ from ..utils import Head, AdaptationDataset
 
 
 class GenerativeEvaluator(EvaluatorBase, abc.ABC):
+    """
+    Base class for all Evaluators of generative networks.
+    It takes care of relatively expensive generation over evaluation dataset batches (if `use_generate=True`),
+    and a caching of its results among multiple evaluators.
+    You need to override only a `evaluate_str` method to implement a new instance of generative evaluator.
+    `evaluate_str` method can also be used for an independent evaluation of a given model on a given Dataset
+    - this reassures a reproducibility of the results reported in the training logs.
+    """
+
     compatible_heads: List[Head] = [Head.SEQ2SEQ]
 
     def __init__(self,
@@ -29,11 +38,15 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
         self.progress_bar = progress_bar
 
     @staticmethod
-    @lru_cache(maxsize=1000)
+    @lru_cache(maxsize=10000)
     def _autoregressive_predict_one(input_ids: torch.LongTensor,
                                     attention_mask: torch.LongTensor,
                                     model: torch.nn.Module,
                                     tokenizer: PreTrainedTokenizer) -> torch.LongTensor:
+        """
+        Performs a generation for a single input batch. The results are meant to be cached,
+        so that other generative evaluators do not perform a generation repeatedly.
+        """
         if isinstance(tokenizer, MBart50Tokenizer):
             # Forced BOS token for MBart50
             return model.generate(input_ids=input_ids, attention_mask=attention_mask,
@@ -49,6 +62,13 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
                                 model: torch.nn.Module,
                                 inputs_batch: Dict[str, torch.LongTensor],
                                 tokenizer: PreTrainedTokenizer) -> Iterator[torch.LongTensor]:
+        """
+        Performs an iterative generation using the default configuration of the model's `generate` method.
+        :param model: model to use for a generation. Must implement its own `generate` method.
+        :param inputs_batch: a batch of inputs with `input_ids` and `attention_mask` attributes.
+        :param tokenizer: a tokenizer corresponding to a model. If applicable, used to resolve special language_ids.
+        """
+
         assert hasattr(model, "generate"), "If Evaluator(use_generate=True), " \
                                            "evaluated model must have its generate() method."
 
@@ -58,6 +78,13 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
     @staticmethod
     def _argmax_predict(model: torch.nn.Module,
                         inputs: Union[BatchEncoding, Dict[str, torch.FloatTensor]]) -> torch.Tensor:
+        """
+        Performs a per-token "generation" based on previous true tokens, i.e. labels,
+        presumably encoded in inputs["decoder_input_ids"]. Such prediction is much faster (no iterative decoding),
+        but might be more optimistic than true model prediction, esp. on samples outside the training domain.
+        :param model: a model to use for prediction.
+        :param inputs: a single inputs batch to be passed into the model.
+        """
         outputs = model(**inputs).logits
         return torch.argmax(outputs, -1)
 
@@ -104,6 +131,9 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
 
 
 class BLEU(GenerativeEvaluator):
+    """
+    Computes standard corpus-level BLEU score.
+    """
     smaller_is_better: bool = False
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
