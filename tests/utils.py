@@ -20,7 +20,9 @@ test_base_models = {
             "model": "sshleifer/tiny-mbart",
             "test_src_lang": "en_XX",
             "test_tgt_lang": "cs_CZ"},
-    "token_classification": "bert-base-multilingual-cased"}
+    "token_classification": "bert-base-multilingual-cased",
+    "sequence_classification": "bert-base-multilingual-cased"
+}
 
 training_arguments = AdaptationArguments(output_dir="adaptation_output_dir",
                                          stopping_strategy=StoppingStrategy.FIRST_OBJECTIVE_NUM_EPOCHS,
