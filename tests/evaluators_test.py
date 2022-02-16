@@ -1,4 +1,6 @@
-from adaptor.evaluators.generative import BLEU, GenerativeEvaluator, ROUGE, BERTScore, METEOR
+from adaptor.evaluators.generative import GenerativeEvaluator
+from adaptor.evaluators.sequence_classification import SeqClassificationEvaluator
+from adaptor.evaluators.token_classification import TokenClassificationEvaluator
 from adaptor.lang_module import LangModule
 from adaptor.objectives.objective_base import Objective
 from adaptor.objectives.seq2seq import Sequence2Sequence
@@ -12,15 +14,18 @@ def assert_evaluator_logs(lang_module: LangModule, objective: Objective, split: 
     # providing labels makes HF lang_module to compute its own loss, which is in DA redundantly done by Objective
     outputs = lang_module(**dataset_sample)
 
-    # loss computation test, possible label smoothing is performed by Adapter
+    # request objective for its loss
     loss = objective.compute_loss(outputs, dataset_sample["labels"], split)
-
-    # make sure loss is actually computed
-    loss.item()
+    assert loss.item()
 
     log = objective.per_objective_log(split)
 
+    # assert that objective's id can be found in each key of the logs
     assert all(str(objective) in k for k in log.keys())
+
+    for split_evaluator in objective.evaluators[split]:
+        # assert that each evaluator of given split was logged and has a value of expected type
+        assert any(str(split_evaluator) in k and isinstance(v, float) for k, v in log.items())
 
 
 gen_lang_module = LangModule(test_base_models["translation_mono"])
@@ -28,8 +33,6 @@ gen_lang_module_multi = LangModule(test_base_models["translation_multi"]["model"
 
 
 def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> None:
-    global gen_lang_module
-
     gen_objective = Sequence2Sequence(gen_lang_module,
                                       texts_or_path=paths["texts"]["translation"],
                                       labels_or_path=paths["labels"]["translation"],
@@ -41,8 +44,6 @@ def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> Non
 
 
 def assert_gen_evaluator_logs_mbart(evaluator: GenerativeEvaluator, split: str) -> None:
-    global gen_lang_module_multi
-
     gen_objective = Sequence2Sequence(gen_lang_module_multi,
                                       texts_or_path=paths["texts"]["translation"],
                                       labels_or_path=paths["labels"]["translation"],
@@ -55,23 +56,56 @@ def assert_gen_evaluator_logs_mbart(evaluator: GenerativeEvaluator, split: str) 
     assert_evaluator_logs(gen_lang_module_multi, gen_objective, split)
 
 
+def assert_ner_evaluator_logs(evaluator: TokenClassificationEvaluator, split: str) -> None:
+    from adaptor.objectives.classification import TokenClassification
+    lang_module = LangModule(test_base_models["token_classification"])
+
+    gen_objective = TokenClassification(lang_module,
+                                        texts_or_path=paths["texts"]["ner"],
+                                        labels_or_path=paths["labels"]["ner"],
+                                        batch_size=1,
+                                        train_evaluators=[evaluator],
+                                        val_evaluators=[evaluator])
+
+    assert_evaluator_logs(lang_module, gen_objective, split)
+
+
+def assert_classification_evaluator_logs(evaluator: SeqClassificationEvaluator, split: str) -> None:
+    from adaptor.objectives.classification import SequenceClassification
+    lang_module = LangModule(test_base_models["sequence_classification"])
+
+    gen_objective = SequenceClassification(lang_module,
+                                           texts_or_path=paths["texts"]["classification"],
+                                           labels_or_path=paths["labels"]["classification"],
+                                           batch_size=1,
+                                           train_evaluators=[evaluator],
+                                           val_evaluators=[evaluator])
+
+    assert_evaluator_logs(lang_module, gen_objective, split)
+
+
 def test_bleu():
+    from adaptor.evaluators.generative import BLEU
     assert_gen_evaluator_logs(BLEU(use_generate=True, decides_convergence=True), "train")
 
 
 def test_bleu_mbart():
+    from adaptor.evaluators.generative import BLEU
     assert_gen_evaluator_logs_mbart(BLEU(use_generate=True, decides_convergence=True), "train")
 
 
 def test_rouge():
+    from adaptor.evaluators.generative import ROUGE
     assert_gen_evaluator_logs(ROUGE(use_generate=False, decides_convergence=True), "train")
 
 
 def test_bertscore():
+    from adaptor.evaluators.generative import BERTScore
     assert_gen_evaluator_logs(BERTScore(use_generate=False, decides_convergence=True), "train")
 
 
 def test_meteor():
+    from adaptor.evaluators.generative import METEOR
     assert_gen_evaluator_logs(METEOR(decides_convergence=True), "train")
 
 
@@ -89,3 +123,13 @@ def test_divergence():
     """
     # from adaptor.evaluators.generative import JS_Divergence
     # assert_gen_evaluator_logs(JS_Divergence(decides_convergence=True), "train")
+
+
+def test_token_fscore():
+    from adaptor.evaluators.token_classification import MeanPerCategoryFScore
+    assert_ner_evaluator_logs(MeanPerCategoryFScore(decides_convergence=True), "train")
+
+
+def test_sequence_accuracy():
+    from adaptor.evaluators.sequence_classification import SequenceAccuracy
+    assert_classification_evaluator_logs(SequenceAccuracy(decides_convergence=False), "train")

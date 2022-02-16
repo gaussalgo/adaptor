@@ -1,4 +1,4 @@
-import itertools
+import abc
 from typing import List
 
 import torch
@@ -8,10 +8,18 @@ from .evaluator_base import EvaluatorBase
 from ..utils import Head, AdaptationDataset
 
 
-class MeanPerCategoryFScore(EvaluatorBase):
+class TokenClassificationEvaluator(EvaluatorBase, abc.ABC):
     """
-    Token classification accuracy, where each input sample of dataset
-    gets a sequence of `labels` of `num_input_ids` length.
+    Base class of token classification evaluators. Inputs format is constraint by `compatible_heads`,
+    checked when the evaluator is passed into the evaluated objective.
+    """
+    compatible_heads: List[Head] = [Head.TOKEN_CLASSIFICATION]
+
+
+class MeanPerCategoryFScore(TokenClassificationEvaluator):
+    """
+    Per-category F1-score of token classification,
+    each input sample of dataset gets a sequence of `labels` of `num_input_ids` length.
     """
 
     compatible_heads: List[Head] = [Head.TOKEN_CLASSIFICATION]
@@ -26,8 +34,7 @@ class MeanPerCategoryFScore(EvaluatorBase):
         false_pos = sum((exp != act) and (act == category_i) for exp, act in zip(expected, actual))
         false_neg = sum((exp != act) and (act != category_i) for exp, act in zip(expected, actual))
 
-        return (true_pos /
-                (true_pos + (1/2 * (false_pos + false_neg))))
+        return (true_pos / (true_pos + (1/2 * (false_pos + false_neg))))
 
     def __call__(self, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, dataset: AdaptationDataset) -> float:
         """
@@ -37,8 +44,8 @@ class MeanPerCategoryFScore(EvaluatorBase):
         actual = []
 
         for batch in dataset:
-            expected.extend(itertools.chain(*batch["labels"]))
-            actual.extend(itertools.chain(*model(**batch).argmax(-1)))
+            expected.extend(batch["labels"].flatten().tolist())
+            actual.extend(model(**batch).logits.argmax(-1).flatten().tolist())
 
         all_categories = set(expected)
         per_category_fscores = [self._per_category_fscore(cat_i, expected, actual) for cat_i in all_categories]
