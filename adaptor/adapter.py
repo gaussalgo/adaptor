@@ -41,7 +41,7 @@ class Adapter(Trainer):
 
         self.schedule = schedule
 
-        orig_callbacks = [] if "callbacks" not in kwargs else kwargs["callbacks"]
+        orig_callbacks = [] if "callbacks" not in kwargs else kwargs.pop("callbacks")
 
         super().__init__(model=lang_module,
                          args=args,
