@@ -181,5 +181,26 @@ Such applications include for instance machine translation of non-canonical doma
 
 See [CONTRIBUTING.md](https://github.com/gaussalgo/adaptor/blob/master/CONTRIBUTING.md). 
 
+## Citing Adapt𝒪r
+
+If you use Adaptor in your research, you can cite it as follows.
+
+### Text
+
+ŠTEFÁNIK, Michal, Vít NOVOTNÝ, Nikola GROVEROVÁ and Petr SOJKA. Adaptor: Objective-Centric Adaptation Framework for Language Models. In  *Proceedings of 60th Annual Meeting of the Association for Computational Linguistics: Demonstrations*. ACL, 2022. 7 pp.
+
+### BibTeX
+
+``` bib
+@inproceedings{stefanik2022adaptor,
+  author = {\v{S}tef\'{a}nik, Michal and Novotn\'{y}, V\'{i}t and Groverov{\'a}, Nikola and Sojka, Petr},
+  title = {Adapt\$\mathcal\{O\}\$r: Objective-Centric Adaptation Framework for Language Models},
+  booktitle = {Proceedings of 60th Annual Meeting of the Association for Computational Linguistics: Demonstrations},
+  publisher = {ACL},
+  numpages = {7},
+  url = {https://arxiv.org/abs/2203.03989},
+}
+```
+
 -------
 If you have any other question(s), feel free to create an issue.
