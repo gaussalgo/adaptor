@@ -212,8 +212,8 @@ class Objective(abc.ABC):
 
     @abc.abstractmethod
     def _compute_loss(self,
-                      labels: torch.LongTensor,
                       logit_outputs: torch.FloatTensor,
+                      labels: torch.LongTensor,
                       inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
         """
         An implementation of the loss computation for a given objective.
@@ -226,9 +226,9 @@ class Objective(abc.ABC):
         pass
 
     def compute_loss(self,
-                     inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
                      logit_outputs: torch.FloatTensor,
-                     labels: Optional[torch.LongTensor] = None,
+                     labels: torch.LongTensor,
+                     inputs: Union[BatchEncoding, Dict[str, torch.Tensor]] = None,
                      split: Optional[str] = "") -> torch.FloatTensor:
         """
         Shared wrapper of objective-specific loss computation. Additionally, it registers model outputs, and labels
@@ -239,7 +239,7 @@ class Objective(abc.ABC):
         :param split: Dataset split. `train` or `eval`.
         :return: a single-item torch tensor with registered grad_fn.
         """
-        loss = self._compute_loss(inputs, logit_outputs, labels)
+        loss = self._compute_loss(logit_outputs, labels, inputs)
         self.loss_history[split].append(loss.item())
         self.num_steps += 1
 
@@ -335,7 +335,7 @@ class Objective(abc.ABC):
         logits = self.compatible_head_model(**model_inputs).logits
 
         logger.warning("Computing loss")
-        loss = self._compute_loss(self.last_input, logits, labels)
+        loss = self._compute_loss(logits, labels, self.last_input)
 
         logger.warning("Loss computation on the recent sample successful. Loss value: %s", loss.item())
         return loss

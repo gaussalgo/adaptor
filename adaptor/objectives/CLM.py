@@ -100,8 +100,8 @@ class CausalLanguageModeling(SequentialMixin, UnsupervisedObjective, abc.ABC):
         self.collator = DataCollatorForCausalLM(self.tokenizer, self.compatible_head_model)
 
     def _compute_loss(self,
-                      labels: torch.LongTensor,
                       logit_outputs: torch.FloatTensor,
+                      labels: torch.LongTensor,
                       inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
         """
         Causal language modeling, as implemented by GPT-2.

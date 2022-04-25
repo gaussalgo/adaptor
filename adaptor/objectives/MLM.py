@@ -69,8 +69,8 @@ class MaskedLanguageModeling(UnsupervisedObjective):
         return collated_iter
 
     def _compute_loss(self,
-                      labels: torch.LongTensor,
                       logit_outputs: torch.FloatTensor,
+                      labels: torch.LongTensor,
                       inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
         """
         Masked language modeling, as implemented by BERT.
