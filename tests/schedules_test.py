@@ -29,7 +29,7 @@ def assert_schedule(lang_module: LangModule, schedule: Schedule):
     for batch in iter(schedule.iterable_dataset("train")):
         logit_outputs = lang_module(**batch)
 
-        loss_combined = schedule.compute_loss(logit_outputs, batch["labels"])
+        loss_combined = schedule.compute_loss(batch, logit_outputs, batch["labels"])
         loss_combined.backward()
 
     # every objective has some key in its logs
@@ -39,7 +39,7 @@ def assert_schedule(lang_module: LangModule, schedule: Schedule):
     for batch in iter(schedule.iterable_dataset("eval")):
         logit_outputs = lang_module(**batch)
 
-        loss_combined = schedule.compute_loss(logit_outputs, batch["labels"])
+        loss_combined = schedule.compute_loss(batch, logit_outputs, batch["labels"])
         loss_combined.backward()
 
     eval_logs = schedule.objectives_log("eval")
