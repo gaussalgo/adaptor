@@ -24,6 +24,7 @@ class Objective(abc.ABC):
     given_id: Optional[str]
     epoch: int
     num_steps: int
+    last_input: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]]
 
     texts: Optional[List[str]]
     texts_path: Optional[str]
@@ -51,7 +52,8 @@ class Objective(abc.ABC):
                  objective_id: Optional[str] = "",
                  loss_weight: Optional[float] = 1,
                  max_samples_per_log: int = 1000,
-                 max_samples_per_eval_log: int = 10000):
+                 max_samples_per_eval_log: int = 10000,
+                 remember_last_input: Optional[bool] = False):
         """
         Shared initialisation logic of every Objective.
         Registers a compatible model for this objective to given `lang_module`,
@@ -71,6 +73,10 @@ class Objective(abc.ABC):
         :param loss_weight: A scalar of the loss of this objective in multi-objective training.
         :param max_samples_per_log: Maximum number batches that this objective will compute for logging.
         :param max_samples_per_eval_log: Maximum number batches that this objective will compute for evaluation logging.
+        :param remember_last_input: Debugging feature: whether the objective should remember the last input
+        to its compatible model. Useful for debugging a development of the new objective;
+        If the training fails (in the interactive - `-i` mode), the last, possibly error input can be retrieved
+        from `this_objective.last_input`.
         """
 
         self.batch_size = batch_size
@@ -78,6 +84,8 @@ class Objective(abc.ABC):
         self.given_id = objective_id
         self.loss_weight = loss_weight
         self.num_steps = 0
+        self.remember_last_input = remember_last_input
+        self.last_input = None
 
         self.compatible_head_model = self.register_compatible_head_model(lang_module,
                                                                          share_other_objective_head,
@@ -138,10 +146,12 @@ class Objective(abc.ABC):
 
         out_logs["%s_%s_loss" % (split, self)] = mean_loss
         out_logs["%s_%s_num_batches" % (split, self)] = len(loss_history)
+
         for evaluator in self.evaluators[split]:
             dataset = self.get_dataset(split, 0, self.compatible_head_model.device,
-                                       firstn=self.max_samples_per_log[split], add_oid=False)
-
+                                       firstn=self.max_samples_per_log[split],
+                                       add_oid=False,
+                                       is_training_dataset=False)
             # evaluator should already return an aggregated value, so unlike loss, we don't average it
             evaluator_value = evaluator(self.compatible_head_model, self.tokenizer, dataset)
             self.evaluations_history[split][evaluator].append(evaluator_value)
@@ -215,10 +225,10 @@ class Objective(abc.ABC):
         """
         Shared wrapper of objective-specific loss computation. Additionally, it registers model outputs, and labels
         for logging and updates this objective progress bar.
-        :param logit_outputs:
-        :param labels:
-        :param split:
-        :return:
+        :param logit_outputs: Raw output of this objective's head.
+        :param labels: Expected true labels of this objective.
+        :param split: Dataset split. `train` or `eval`.
+        :return: a single-item torch tensor with registered grad_fn.
         """
         loss = self._compute_loss(logit_outputs, labels)
         self.loss_history[split].append(loss.item())
@@ -238,7 +248,7 @@ class Objective(abc.ABC):
         Beware that encoding and data iteration is a primary bottleneck of training on high-performing GPUs.
 
         :param split: A split to retrieve encoded inputs for. `train` or `eval`.
-        :return: Iterable over the encoded inputs.
+        :return: An iterable over the encoded inputs.
         """
         pass
 
@@ -276,6 +286,10 @@ class Objective(abc.ABC):
             sample["oid"] = id(self)
             return sample
 
+        def _remember_input(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
+            self.last_input = sample
+            return sample
+
         device_inputs_iter = map(_sample_to_device, inputs_iter)
 
         if add_oid:
@@ -284,7 +298,34 @@ class Objective(abc.ABC):
         if firstn is not None and firstn < self.dataset_length[split]:
             device_inputs_iter = itertools.islice(device_inputs_iter, firstn)
 
+        if self.remember_last_input:
+            device_inputs_iter = map(_remember_input, device_inputs_iter)
+
         return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split])
+
+    def compute_loss_on_last_sample(self) -> torch.FloatTensor:
+        """
+        This method aims to reproduce an error of calling the `objective.compatible_head_model`
+        on the `objective.last_input`. Useful for debugging new objective(s) in interactive (`-i`) mode.
+        """
+        if not self.remember_last_input:
+            raise ValueError("This objective does not remember its last output. "
+                             "For debugging, initialize the objective with `remember_last_input=True`.")
+
+        logger.warning("Reproducing loss computation on the last sample")
+        logger.warning("The last sample can be retrieved from `this_objective_instance.last_input`")
+        labels = self.last_input["labels"]
+
+        logger.warning("Computing model output")
+        model_inputs = {k: v for k, v in self.last_input.items() if k not in ("oid", "labels")}
+        logits = self.compatible_head_model(**model_inputs).logits
+
+        logger.warning("Computing loss")
+        loss = self._compute_loss(self.last_input, logits, labels)
+
+        logger.warning("Loss computation on the recent sample successful. Loss value: %s", loss.item())
+        return loss
+
 
     @abc.abstractmethod
     def _per_split_iterators(self, split: str) -> Union[Iterable[str], Tuple[Iterable[str], Iterable[str]]]:
