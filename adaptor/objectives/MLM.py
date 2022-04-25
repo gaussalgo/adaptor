@@ -1,4 +1,4 @@
-from typing import Iterable, Dict, Union
+from typing import Iterable, Dict, Union, Optional
 
 import torch
 from torch.nn import CrossEntropyLoss
@@ -42,7 +42,7 @@ class MaskedLanguageModeling(UnsupervisedObjective):
         """
         batch_features = []
         for text in texts:
-            input_features = self.tokenizer(text)
+            input_features = self.tokenizer(text, truncation=True)
             batch_features.append(input_features)
 
             # maybe yield a batch
@@ -68,15 +68,21 @@ class MaskedLanguageModeling(UnsupervisedObjective):
         collated_iter = self._mask_some_tokens(texts_iter)
         return collated_iter
 
-    def _compute_loss(self, mlm_token_logits: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
+    def _compute_loss(self,
+                      logit_outputs: torch.FloatTensor,
+                      labels: torch.LongTensor,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
         """
-        Computes loss of MLM objective.
-        :param mlm_token_logits: Raw LM model outputs
+        Masked language modeling, as implemented by BERT.
+
+        :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
+        :param logit_outputs: Raw LM model outputs
         :param labels: ids of expected outputs.
+
         :return: loss value with grad_fn.
         """
         # token classification loss, from transformers.BertForMaskedLM
         loss_fct = CrossEntropyLoss()
-        vocab_size = mlm_token_logits.size()[-1]
-        masked_lm_loss = loss_fct(mlm_token_logits.view(-1, vocab_size), labels.view(-1))
+        vocab_size = logit_outputs.size()[-1]
+        masked_lm_loss = loss_fct(logit_outputs.view(-1, vocab_size), labels.view(-1))
         return masked_lm_loss

@@ -15,7 +15,7 @@ def assert_evaluator_logs(lang_module: LangModule, objective: Objective, split: 
     outputs = lang_module(**dataset_sample)
 
     # request objective for its loss
-    loss = objective.compute_loss(outputs, dataset_sample["labels"], split)
+    loss = objective.compute_loss(outputs, dataset_sample["labels"], dataset_sample, split)
     assert loss.item()
 
     log = objective.per_objective_log(split)

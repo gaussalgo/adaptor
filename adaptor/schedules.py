@@ -1,9 +1,9 @@
 import abc
 import logging
-from typing import List, Iterable, Dict, Any, Tuple, Iterator
+from typing import List, Iterable, Dict, Any, Tuple, Iterator, Union, Optional
 
 import torch
-from transformers import TrainerCallback, TrainingArguments, TrainerState, TrainerControl
+from transformers import TrainerCallback, TrainingArguments, TrainerState, TrainerControl, BatchEncoding
 
 from adaptor.objectives.objective_base import Objective
 from adaptor.utils import TransformerAdaptationDataset, StoppingStrategy, AdaptationArguments
@@ -151,18 +151,23 @@ class Schedule(abc.ABC):
         if self.should_stop:
             logger.warning("Scheduler reached a termination condition: %s" % stopping_strategy.name)
 
-    def compute_loss(self, logit_outputs: torch.FloatTensor, labels) -> torch.FloatTensor:
+    def compute_loss(self,
+                     logit_outputs: torch.FloatTensor,
+                     labels: torch.Tensor,
+                     inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
         """
         Retrieves a loss from the corresponding objective.
 
         :param logit_outputs: Raw model outputs.
         :param labels: Corresponding expected outputs.
+        :param inputs: Input sample corresponding to given model output (logits) and ground truth (labels).
+
         :return: loss scalar of corresponding objective, with grad_fn.
         """
         split, oid = self.objectives_outputs_queue.pop(0)
 
         # the objective loss arrives aggregated into a single item
-        loss = self.objectives[split][oid].compute_loss(logit_outputs, labels, split)
+        loss = self.objectives[split][oid].compute_loss(logit_outputs, labels, inputs, split)
 
         return loss
 
@@ -190,7 +195,7 @@ class Schedule(abc.ABC):
         :return: Iterator over evaluation samples.
         """
         while True:
-            # check for stopping conditions at the beginning of every objective epoch
+            # check for stopping conditions at the beginning of every epoch's objective
             self.remember_if_should_stop()
 
             dataset = objective.get_dataset("train", obj_i, self.args.device)
