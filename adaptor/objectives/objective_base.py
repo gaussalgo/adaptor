@@ -211,7 +211,10 @@ class Objective(abc.ABC):
         return passed_patience_evals and did_not_improve
 
     @abc.abstractmethod
-    def _compute_loss(self, logit_outputs: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
+    def _compute_loss(self,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
+                      logit_outputs: Optional[torch.FloatTensor] = None,
+                      labels: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         """
         An implementation of the loss computation for a given objective.
         Override this, or inherit it from other suitable objective when implementing custom objective.
@@ -221,16 +224,21 @@ class Objective(abc.ABC):
         """
         pass
 
-    def compute_loss(self, logit_outputs: torch.FloatTensor, labels: torch.LongTensor, split: str) -> torch.FloatTensor:
+    def compute_loss(self,
+                     inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
+                     logit_outputs: Optional[torch.FloatTensor] = None,
+                     labels: Optional[torch.LongTensor] = None,
+                     split: Optional[str] = "") -> torch.FloatTensor:
         """
         Shared wrapper of objective-specific loss computation. Additionally, it registers model outputs, and labels
         for logging and updates this objective progress bar.
+        :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
         :param logit_outputs: Raw output of this objective's head.
         :param labels: Expected true labels of this objective.
         :param split: Dataset split. `train` or `eval`.
         :return: a single-item torch tensor with registered grad_fn.
         """
-        loss = self._compute_loss(logit_outputs, labels)
+        loss = self._compute_loss(inputs, logit_outputs, labels)
         self.loss_history[split].append(loss.item())
         self.num_steps += 1
 
@@ -248,7 +256,7 @@ class Objective(abc.ABC):
         Beware that encoding and data iteration is a primary bottleneck of training on high-performing GPUs.
 
         :param split: A split to retrieve encoded inputs for. `train` or `eval`.
-        :return: An iterable over the encoded inputs.
+        :return: Iterable over the encoded inputs.
         """
         pass
 
@@ -257,7 +265,8 @@ class Objective(abc.ABC):
                     objective_i: int,
                     device: Union[str, torch.device],
                     firstn: Optional[int] = None,
-                    add_oid: bool = True) -> TransformerAdaptationDataset:
+                    add_oid: bool = True,
+                    is_training_dataset: bool = True) -> TransformerAdaptationDataset:
         """
         Default logic for wrapping the inputs iterator into torch.IterableDataset, used in Trainer.train_dataloaer.
         :param split: A split of the retrieved dataset. `train` or `eval`.
@@ -265,10 +274,14 @@ class Objective(abc.ABC):
         :param device: Device to transfer this data set to.
         :param firstn: If given, a number of the retrieved items from the dataset.
         :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
+        :param is_training_dataset: Whether this dataset is used for training -> if to update the epochs counter.
 
         :return: TransformerAdaptationDataset wrapping a data set of this objective.
         """
-        self.epoch += 1 if split == "train" else 0
+        if split == "train" and is_training_dataset:
+            # increment epoch only for train split and only for the dataset used as training
+            # - get_dataset is also called from self.per_objective_log, or specific objectives
+            self.epoch += 1 if split == "train" else 0
 
         self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
                                          desc=str(self),
