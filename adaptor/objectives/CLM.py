@@ -1,5 +1,5 @@
 import abc
-from typing import List, Union, Dict, Iterable
+from typing import List, Union, Dict, Iterable, Optional
 
 import torch
 from torch.nn import CrossEntropyLoss
@@ -99,7 +99,10 @@ class CausalLanguageModeling(SequentialMixin, UnsupervisedObjective, abc.ABC):
 
         self.collator = DataCollatorForCausalLM(self.tokenizer, self.compatible_head_model)
 
-    def _compute_loss(self, lm_logit_outputs: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
+    def _compute_loss(self,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
+                      lm_logit_outputs: Optional[torch.FloatTensor] = None,
+                      labels: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         # from transformers.GPT2LMHeadModel.forward()
         shift_logits = lm_logit_outputs[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()

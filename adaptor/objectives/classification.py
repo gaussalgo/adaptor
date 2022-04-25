@@ -90,8 +90,10 @@ class TokenClassification(SupervisedObjective):
 
         return aligned_collated_iter
 
-    def _compute_loss(self, logit_outputs: torch.FloatTensor,
-                      labels: torch.LongTensor,
+    def _compute_loss(self,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
+                      logit_outputs: Optional[torch.FloatTensor] = None,
+                      labels: Optional[torch.LongTensor] = None,
                       attention_mask: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         """
         Computes a loss for model outputs on a single token classification batch.
@@ -152,9 +154,13 @@ class SequenceClassification(SupervisedObjective):
             # yield residual batch
             yield collator(batch_features)
 
-    def _compute_loss(self, logit_outputs: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
+    def _compute_loss(self,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
+                      logit_outputs: Optional[torch.FloatTensor] = None,
+                      labels: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         """
         Computes a loss for model outputs on a single sequence classification batch.
+        :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
         :param logit_outputs: Sequence Classification model raw outputs.
         :param labels: Expected labels.
         :return: loss value with grad_fn.

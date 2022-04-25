@@ -70,8 +70,7 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
     compatible_head: Head = Head.SEQ2SEQ
     collator: Callable[[List[Dict[str, torch.FloatTensor]]], List[Dict[str, torch.FloatTensor]]]
 
-    def __init__(self, *args,
-                 **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Refer to the documentation of superclass.
         """
@@ -88,10 +87,14 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
         # if it does not, this will just set unused attribute of tokenizer
         self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
 
-    def _compute_loss(self, lm_logit_outputs: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
+    def _compute_loss(self,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
+                      lm_logit_outputs: Optional[torch.FloatTensor] = None,
+                      labels: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         """
         Computes sequence2sequence loss
-        :param lm_logit_outputs: Raw outputs of language modeling head model
+        :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
+        :param logit_outputs: Raw outputs of language modeling head model
         :param labels: Token ids of expected outputs.
         :return: Single value of the loss, with grad_fn.
         """

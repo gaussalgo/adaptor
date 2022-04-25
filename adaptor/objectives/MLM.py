@@ -1,4 +1,4 @@
-from typing import Iterable, Dict, Union
+from typing import Iterable, Dict, Union, Optional
 
 import torch
 from torch.nn import CrossEntropyLoss
@@ -68,9 +68,13 @@ class MaskedLanguageModeling(UnsupervisedObjective):
         collated_iter = self._mask_some_tokens(texts_iter)
         return collated_iter
 
-    def _compute_loss(self, mlm_token_logits: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
+    def _compute_loss(self,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
+                      mlm_token_logits: Optional[torch.FloatTensor] = None,
+                      labels: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         """
         Computes loss of MLM objective.
+        :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
         :param mlm_token_logits: Raw LM model outputs
         :param labels: ids of expected outputs.
         :return: loss value with grad_fn.

@@ -339,7 +339,6 @@ class Objective(abc.ABC):
         logger.warning("Loss computation on the recent sample successful. Loss value: %s", loss.item())
         return loss
 
-
     @abc.abstractmethod
     def _per_split_iterators(self, split: str) -> Union[Iterable[str], Tuple[Iterable[str], Iterable[str]]]:
         """
