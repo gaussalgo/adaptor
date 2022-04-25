@@ -88,9 +88,9 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
         self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
 
     def _compute_loss(self,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
-                      lm_logit_outputs: Optional[torch.FloatTensor] = None,
-                      labels: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
+                      labels: torch.LongTensor,
+                      lm_logit_outputs: torch.FloatTensor,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
         """
         Computes sequence2sequence loss
         :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.

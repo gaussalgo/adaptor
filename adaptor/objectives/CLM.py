@@ -100,11 +100,20 @@ class CausalLanguageModeling(SequentialMixin, UnsupervisedObjective, abc.ABC):
         self.collator = DataCollatorForCausalLM(self.tokenizer, self.compatible_head_model)
 
     def _compute_loss(self,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
-                      lm_logit_outputs: Optional[torch.FloatTensor] = None,
-                      labels: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
+                      labels: torch.LongTensor,
+                      logit_outputs: torch.FloatTensor,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
+        """
+        Causal language modeling, as implemented by GPT-2.
+
+        :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
+        :param logit_outputs: Raw output of this objective's head.
+        :param labels: Expected true labels of this objective.
+
+        :return: a single-item torch tensor with registered grad_fn.
+        """
         # from transformers.GPT2LMHeadModel.forward()
-        shift_logits = lm_logit_outputs[..., :-1, :].contiguous()
+        shift_logits = logit_outputs[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
         # Flatten the tokens
         loss_fct = CrossEntropyLoss()

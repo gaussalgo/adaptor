@@ -212,12 +212,13 @@ class Objective(abc.ABC):
 
     @abc.abstractmethod
     def _compute_loss(self,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
-                      logit_outputs: Optional[torch.FloatTensor] = None,
-                      labels: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
+                      labels: torch.LongTensor,
+                      logit_outputs: torch.FloatTensor,
+                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
         """
         An implementation of the loss computation for a given objective.
         Override this, or inherit it from other suitable objective when implementing custom objective.
+        :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
         :param logit_outputs: Raw output of this objective's head.
         :param labels: Expected true labels of this objective.
         :return: a single-item torch tensor with registered grad_fn.
@@ -225,8 +226,8 @@ class Objective(abc.ABC):
         pass
 
     def compute_loss(self,
-                     inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
-                     logit_outputs: Optional[torch.FloatTensor] = None,
+                     inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
+                     logit_outputs: torch.FloatTensor,
                      labels: Optional[torch.LongTensor] = None,
                      split: Optional[str] = "") -> torch.FloatTensor:
         """
