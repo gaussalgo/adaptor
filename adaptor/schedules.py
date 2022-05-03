@@ -43,6 +43,16 @@ class Schedule(abc.ABC):
         self.objectives = {"train": {id(o): o for o in objectives},
                            "eval": {id(o): o for o in objectives + list(extra_eval_objectives)}}
 
+        # initially, let the user know the total number of samples that will be used for training and evaluation
+        for split in ["train", "eval"]:
+            num_samples = 0
+            for oid, objective in self.objectives[split].items():
+                num_samples += objective.dataset_length[split]
+
+            logger.warning("Total number of %s samples: %s", split, num_samples)
+            if not num_samples:
+                logger.warning("Make sure that you do not want to pass any %s samples!", split)
+
         self.objectives_outputs_queue = []
         self.converged_objectives = []
         self.should_stop = True
