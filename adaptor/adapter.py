@@ -95,7 +95,7 @@ class Adapter(Trainer):
 
         return out
 
-    def save_model(self, output_dir: Optional[str] = None) -> None:
+    def save_model(self, output_dir: Optional[str] = None, **kwargs) -> None:
         # HF native reload compatibility
         objectives_counter = {str(obj): 0 for obj in self.schedule.objectives["train"].values()}
 
