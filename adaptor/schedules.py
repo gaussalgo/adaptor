@@ -86,7 +86,7 @@ class Schedule(abc.ABC):
         return out_logs
 
     def _objective_passed_epochs(self, oid: int) -> bool:
-        return self.objectives["train"][oid].epoch >= self.args.num_train_epochs
+        return self.objectives["train"][oid].epoch > self.args.num_train_epochs
 
     def _should_stop(self) -> Tuple[bool, StoppingStrategy]:
         """
