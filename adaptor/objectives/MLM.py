@@ -60,11 +60,7 @@ class MaskedLanguageModeling(UnsupervisedObjective):
         :param split: Data split. `train` or `eval`.
         :return:
         """
-        if self.texts is not None:
-            texts_iter = iter(self.texts)
-        else:
-            texts_iter = AdaptationDataset.iter_text_file_per_line(self.texts_path)
-
+        texts_iter = self._per_split_iterator_single(split)
         collated_iter = self._mask_some_tokens(texts_iter)
         return collated_iter
 
