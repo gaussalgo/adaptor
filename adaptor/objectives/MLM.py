@@ -5,7 +5,7 @@ from torch.nn import CrossEntropyLoss
 from transformers import DataCollatorForLanguageModeling, DataCollatorForWholeWordMask, BatchEncoding
 
 from ..objectives.objective_base import UnsupervisedObjective
-from ..utils import AdaptationDataset, Head
+from ..utils import Head
 
 
 class MaskedLanguageModeling(UnsupervisedObjective):
