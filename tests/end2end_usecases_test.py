@@ -109,5 +109,5 @@ def test_evaluation_ner():
                                              val_evaluators=evaluators)
 
     evaluation = eval_ner_objective.per_objective_log("eval")
-
-    assert all("eval-%s-%s" % (eval_ner_objective, evaluator) in evaluation for evaluator in evaluators)
+    for evaluator in evaluators:
+        assert "eval_%s_%s" % (eval_ner_objective, evaluator) in evaluation

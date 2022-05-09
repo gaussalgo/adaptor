@@ -4,7 +4,7 @@ import torch
 from transformers import DataCollatorForTokenClassification, DataCollatorWithPadding, BatchEncoding
 
 from ..objectives.objective_base import SupervisedObjective
-from ..utils import AdaptationDataset, Head
+from ..utils import Head
 
 
 class TokenClassification(SupervisedObjective):
