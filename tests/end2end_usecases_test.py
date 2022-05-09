@@ -2,17 +2,20 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, AutoModelForToken
 
 from adaptor.adapter import Adapter
 from adaptor.evaluators.generative import BLEU
+from adaptor.evaluators.token_classification import MeanFScore, AverageAccuracy
 from adaptor.lang_module import LangModule
 from adaptor.objectives.MLM import MaskedLanguageModeling
 from adaptor.objectives.backtranslation import BackTranslation, BackTranslator
 from adaptor.objectives.classification import TokenClassification
 from adaptor.objectives.seq2seq import Sequence2Sequence
-from adaptor.schedules import ParallelSchedule
+from adaptor.schedules import ParallelSchedule, SequentialSchedule
 from utils import training_arguments, paths, test_base_models
 
 unsup_target_domain_texts = paths["texts"]["unsup"]
 sup_target_domain_texts = paths["texts"]["ner"]
 sup_target_domain_labels = paths["labels"]["ner"]
+
+ner_model_out_dir = "entity_detector_model"
 
 
 def test_adaptation_ner():
@@ -30,18 +33,18 @@ def test_adaptation_ner():
                                       labels_or_path=paths["labels"]["ner"])]
 
     # 4. pick a schedule of the selected objectives
-    schedule = ParallelSchedule(objectives, training_arguments)
+    schedule = SequentialSchedule(objectives, training_arguments)
 
     # 5. Run the training using Adapter, similarly to running HF.Trainer, only adding `schedule`
     adapter = Adapter(lang_module, schedule, training_arguments)
     adapter.train()
 
     # 6. save the trained lang_module (with all heads)
-    adapter.save_model("entity_detector_model")
+    adapter.save_model(ner_model_out_dir)
 
     # 7. reload and use it like any other Hugging Face model
-    ner_model = AutoModelForTokenClassification.from_pretrained("entity_detector_model/TokenClassification")
-    tokenizer = AutoTokenizer.from_pretrained("entity_detector_model/TokenClassification")
+    ner_model = AutoModelForTokenClassification.from_pretrained("%s/TokenClassification" % ner_model_out_dir)
+    tokenizer = AutoTokenizer.from_pretrained("%s/TokenClassification" % ner_model_out_dir)
 
     inputs = tokenizer("Is there any Abraham Lincoln here?", return_tensors="pt")
     outputs = ner_model(**inputs)
@@ -57,8 +60,7 @@ def test_adaptation_translation():
     # (optional) pick train and validation evaluators for the objectives
     seq2seq_evaluators = [BLEU(use_generate=True, decides_convergence=True)]
 
-    # 2. pick objectives - we use BART's objective for adaptation and mBART's seq2seq objective for fine-tuning
-    # TODO old comments
+    # 2. pick objectives
     objectives = [BackTranslation(lang_module,
                                   back_translator=BackTranslator("Helsinki-NLP/opus-mt-cs-en"),
                                   batch_size=1,
@@ -88,4 +90,24 @@ def test_adaptation_translation():
     output_text = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
     print(output_text)
 
-# test_adaptation_translation()
+
+def test_evaluation_ner():
+    # first, create a model to evaluate:
+    test_adaptation_ner()
+
+    # reload LangModule from this directory
+    lang_module = LangModule("%s/TokenClassification" % ner_model_out_dir)
+
+    evaluators = [MeanFScore(), AverageAccuracy()]
+    # evaluate the result again through the Objective, that takes care of labels alignment
+    eval_ner_objective = TokenClassification(lang_module,
+                                             batch_size=1,
+                                             texts_or_path=[],
+                                             labels_or_path=[],
+                                             val_texts_or_path=paths["texts"]["ner"],
+                                             val_labels_or_path=paths["labels"]["ner"],
+                                             val_evaluators=evaluators)
+
+    evaluation = eval_ner_objective.per_objective_log("eval")
+
+    assert all("eval-%s-%s" % (eval_ner_objective, evaluator) in evaluation for evaluator in evaluators)

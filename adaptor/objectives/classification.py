@@ -79,12 +79,7 @@ class TokenClassification(SupervisedObjective):
         :return: Encodings compatible with self.compatible_model_head.
         """
 
-        if self.texts is not None:
-            texts_iter = iter(self.texts)
-            labels_iter = iter(self.labels)
-        else:
-            texts_iter = AdaptationDataset.iter_text_file_per_line(self.texts_path)
-            labels_iter = AdaptationDataset.iter_text_file_per_line(self.labels_path)
+        texts_iter, labels_iter = self._per_split_iterators(split)
 
         aligned_collated_iter = self._wordpiece_token_label_alignment(texts_iter, labels_iter)
 

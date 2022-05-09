@@ -55,7 +55,7 @@ class Schedule(abc.ABC):
 
         self.objectives_outputs_queue = []
         self.converged_objectives = []
-        self.should_stop = True
+        self.should_stop = False
 
         self.args = args
 

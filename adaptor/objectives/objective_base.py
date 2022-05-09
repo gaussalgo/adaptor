@@ -243,8 +243,8 @@ class Objective(abc.ABC):
         self.loss_history[split].append(loss.item())
         self.num_steps += 1
 
-        self.progressbar[split].set_postfix(refresh=False, split=split, loss=loss.item(), epoch=self.epoch)
-        self.progressbar[split].update(1)
+        if self.progressbar[split] is not None:
+            self.progressbar[split].set_postfix(refresh=False, split=split, loss=loss.item(), epoch=self.epoch)
 
         return loss * self.loss_weight
 
@@ -267,7 +267,8 @@ class Objective(abc.ABC):
                     device: Union[str, torch.device],
                     firstn: Optional[int] = None,
                     add_oid: bool = True,
-                    is_training_dataset: bool = True) -> TransformerAdaptationDataset:
+                    is_training_dataset: bool = True,
+                    show_progressbar: bool = True) -> TransformerAdaptationDataset:
         """
         Default logic for wrapping the inputs iterator into torch.IterableDataset, used in Trainer.train_dataloaer.
         :param split: A split of the retrieved dataset. `train` or `eval`.
@@ -284,12 +285,16 @@ class Objective(abc.ABC):
             # - get_dataset is also called from self.per_objective_log, or specific objectives
             self.epoch += 1 if split == "train" else 0
 
-        self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
-                                         desc=str(self),
-                                         unit="batches",
-                                         position=objective_i,
-                                         leave=True)
-        self.progressbar[split].set_postfix(refresh=False, split=split, epoch=self.epoch, loss=-1)
+        if show_progressbar:
+            self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
+                                             desc=str(self),
+                                             unit="batches",
+                                             position=objective_i,
+                                             leave=True)
+            self.progressbar[split].set_postfix(refresh=False, split=split, epoch=self.epoch, loss=-1)
+        else:
+            # we do not update loss, if no progress bar is pertained
+            self.progressbar[split] = None
 
         inputs_iter = self._get_inputs_iterator(split)
 
@@ -304,6 +309,10 @@ class Objective(abc.ABC):
             self.last_input = sample
             return sample
 
+        def _update_pbar(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
+            self.progressbar[split].update(1)
+            return sample
+
         device_inputs_iter = map(_sample_to_device, inputs_iter)
 
         if add_oid:
@@ -314,6 +323,9 @@ class Objective(abc.ABC):
 
         if self.remember_last_input:
             device_inputs_iter = map(_remember_input, device_inputs_iter)
+
+        if show_progressbar:
+            device_inputs_iter = map(_update_pbar, device_inputs_iter)
 
         return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split])
 
