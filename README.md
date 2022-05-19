@@ -3,24 +3,42 @@
 [![Tests](https://github.com/gaussalgo/adaptor/actions/workflows/test.yml/badge.svg)](https://github.com/gaussalgo/adaptor/actions)
 [![PyPI version](https://badge.fury.io/py/adaptor.svg)](https://badge.fury.io/py/adaptor)
 
-Adaptor can help you to easily adapt a language model to your own data domain, task,
-or custom research objective(s).
+Adaptor will help you to easily adapt a language model to your own **data domain(s)**, **task(s)**,
+or **custom objective(s)**.
 
-### Why should I care about adaptation?
+If you want to jump right in, take a look at the [tutorials](tutorials).
+
+## Table of Content
+<details>
+<summary>Click to expand</summary>
+
+- [Background](#how-to-use-adaptor)
+    - [Benefits of Task and Domain Adaptation](#benefits-of-task-and-domain-adaptation)
+    - [How Can Adapt𝒪r Help](#how-can-adaptor-help)
+- [Usage](#usage)
+    - [Install](#usage)
+    - [Use-cases](#adapted-named-entity-recognition)
+    - **[Tutorials](tutorials)**
+- [How to Contribute](CONTRIBUTING.md)
+- [Cite](#citing-adapt𝒪r)
+</details>
+
+
+### Benefits of Task and Domain Adaptation
 
 Both domain adaptation (e.g. [Beltagy, 2019](https://aclanthology.org/D19-1371/)) 
 and task adaptation (e.g. [Gururangan, 2020](https://aclanthology.org/2020.acl-main.740/))
 are reported to improve quality of the language models on end tasks, 
 and improve model's comprehension on more *niche* domains,
 suggesting that it's usually a good idea to adapt pre-trained model before the final fine-tuning. 
-However, it is still not a common practice, maybe because it is still a tedious thing to do. A multi-step, 
+However, it is still not a common practice, maybe because it is still a tedious thing to do. In the model-centric training, the multi-step, 
 or multi-objective training requires a separate configuration of every training step due to the differences in the models' 
 architectures specific to the chosen training objective and data set.
 
 ### How Adaptor handles training?
 
 Adaptor framework abstracts the term of *Objective* away from the model.
-With Adaptor, *Any* objective can be applied to *any* model, for as long as the trained model has some *head* of compatible shape.
+With Adaptor, *Any* objective can be applied to *any* model, for as long as the trained model has some *head* of a compatible shape.
 
 The ordering in which the `Objective`s are applied is determined by the given `Schedule`.
 In conventional adaptation, the objectives are applied *sequentially* (that's what `SequentialSchedule` does), 
@@ -37,7 +55,7 @@ dataset sampling and objective-specific feature alignment (compliant with `objec
 When training classic `transformers` models, a selection of objectives is model-agnostic: each objective takes care
 of resolving its own compatible head within given `LangModule`. 
 
-### Why is it useful?
+### How Can Adaptor Help
 
 Adaptor introduces objective-centric, instead of model-centric approach to the training process, 
 that makes it **easier** to experiment with **multi-objective** training, creating **custom objectives**. Thanks to that, you can do some things,
@@ -48,16 +66,16 @@ between different training scripts, minimising a chance of error and improving r
 on multiple objectives in every training step
 * **Track the progress** of the model, concurrently on *each* relevant objective, allowing you to easier 
 recognise weak points of your model
-* Easily perform **Multi-task learning**, which [reportedly](https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00335/96483/An-Empirical-Study-on-Robustness-to-Spurious) 
+* Easily perform **Multi-task learning**, which that [can](https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00335/96483/An-Empirical-Study-on-Robustness-to-Spurious) 
 improves model robustness
-* Although Adaptor aims primarily for adapting the models of the transformer family, the library is designed to
-work with **any PyTorch model** 
+* Although Adaptor aims primarily for training the models of the transformer family, the library is designed to
+work with **any PyTorch model**
 
 Built upon the well-established and maintained 🤗 Transformers library, Adaptor will automatically support 
-future new NLP models out-of-box. The adaptation of Adaptor to a different version of Hugging Face Transformers library 
+future new NLP models out-of-box. The upgrade of Adaptor to a different version of Hugging Face Transformers library 
 should not take longer than a few minutes.
 
-### How to use Adaptor
+### Usage
 
 First, install the library: 
 ```shell
@@ -71,7 +89,8 @@ cd adaptor
 python -m pip install -e .
 ```
 
-You can also find and run the examples from below running in `tests/end2end_usecases_test.py`.
+You can also find and run full examples below with all the imports in 
+[`tests/end2end_usecases_test.py`](tests/end2end_usecases_test.py).
 
 #### Adapted Named Entity Recognition
 
@@ -159,9 +178,9 @@ print(output_text)
 ```
 **Try this example** with training resources resolution from OPUS in `examples/machine_translation/train_wiki_adapt_bible.py`
 
-#### More examples will appear
+#### More examples
 
-but contributions are welcome :) (see *How can you contribute* below)
+You can find a few more exaples in [tutorials](tutorials), but contributions are welcome :) (see *[CONTRIBUTING.md](CONTRIBUTING.md)*)
 
 ### Motivation for objective-centric training
 
@@ -179,11 +198,17 @@ Such applications include for instance machine translation of non-canonical doma
 
 ### How can you contribute?
 
-See [CONTRIBUTING.md](https://github.com/gaussalgo/adaptor/blob/master/CONTRIBUTING.md). 
+* If you want to add a new objective or schedule, see [CONTRIBUTING.md](https://github.com/gaussalgo/adaptor/blob/master/CONTRIBUTING.md). 
+
+* If you find an issue, please report it [in this repository](https://github.com/gaussalgo/adaptor/issues) and if you'd
+also be able to fix it, don't hesitate to contribute and create a PR.
+
+* If you'd just like to share your general impressions or personal experience with others, 
+we're happy to get into a discussion in the [Discussions section](https://github.com/gaussalgo/adaptor/discussions).
 
 ## Citing Adapt𝒪r
 
-If you use Adaptor in your research, you can cite it as follows.
+If you use Adaptor in your research, please cite it as follows.
 
 ### Text
 
@@ -198,7 +223,7 @@ If you use Adaptor in your research, you can cite it as follows.
   booktitle = {Proceedings of 60th Annual Meeting of the Association for Computational Linguistics: Demonstrations},
   publisher = {ACL},
   numpages = {7},
-  url = {https://arxiv.org/abs/2203.03989},
+  url = {https://aclanthology.org/2022.acl-demo.26},
 }
 ```
 

@@ -17,7 +17,7 @@ from adaptor.objectives.seq2seq import Sequence2Sequence
 from adaptor.schedules import ParallelSchedule
 from adaptor.utils import AdaptationArguments, StoppingStrategy
 
-from examples.data_utils_opus import OPUSDataset
+from utils.data_utils_opus import OPUSDataset
 
 data_dir = "data_dir"
 experiment_id = "experiment_2.4"

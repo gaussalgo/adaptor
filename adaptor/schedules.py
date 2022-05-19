@@ -129,11 +129,11 @@ class Schedule(abc.ABC):
             if total_steps >= self.args.max_steps:
                 return True, StoppingStrategy.NUM_STEPS_TOTAL
 
-        elif self.args.stopping_strategy == StoppingStrategy.NUM_STEPS_ALL_OBJECTIVES:
+        elif self.args.stopping_strategy == StoppingStrategy.ALL_OBJECTIVES_NUM_STEPS:
             max_steps_objectives = [o for o in self.objectives["train"].values() if o.num_steps >= self.args.max_steps]
             logger.warning("Objectives that passed max_steps: %s" % [str(o) for o in max_steps_objectives])
 
-            return len(max_steps_objectives) == len(self.objectives["train"]), StoppingStrategy.NUM_STEPS_ALL_OBJECTIVES
+            return len(max_steps_objectives) == len(self.objectives["train"]), StoppingStrategy.ALL_OBJECTIVES_NUM_STEPS
 
         return False, self.args.stopping_strategy
 
@@ -256,7 +256,7 @@ class Schedule(abc.ABC):
         """
         length_combined = int(sum((o.dataset_length[split] // o.batch_size) for o in self.objectives[split].values()))
         if split == "train":
-            length_combined *= self.args.num_train_epochs
+            length_combined *= int(self.args.num_train_epochs)
 
         return TransformerAdaptationDataset(self._combine_datasets(split), length_combined)
 
