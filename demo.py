@@ -12,8 +12,6 @@ We permute the following parameters:
 import comet_ml  # logging hook must be imported before torch # noqa F401
 
 import torch
-from transformers import AutoModelForSeq2SeqLM
-
 from adaptor.adapter import Adapter
 from adaptor.evaluators.generative import BLEU, ROUGE, BERTScore
 from adaptor.lang_module import LangModule
@@ -53,7 +51,7 @@ bible_val_pairs = OPUSDataset("Bible", "val", src_lang, tgt_lang, data_dir=data_
 training_arguments = AdaptationArguments(output_dir=experiment_id,
                                          learning_rate=2e-5,  # we set LR=2e-4 for pre-training experiments
                                          # stopping_strategy=StoppingStrategy.ALL_OBJECTIVES_CONVERGED,
-                                         stopping_strategy=StoppingStrategy.ALL_OBJECTIVES_NUM_STEPS,
+                                         stopping_strategy=StoppingStrategy.NUM_STEPS_ALL_OBJECTIVES,
                                          do_train=True,
                                          do_eval=True,
                                          warmup_steps=10000,
@@ -156,22 +154,22 @@ print("Starting evaluation")
 
 test_device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# translator_model = lang_module.trainable_models[str(id(seq_wiki))].to(test_device)
-translator_model = AutoModelForSeq2SeqLM.from_pretrained("experiment_9/checkpoint-19000/Wiki-Sequence2Sequence").to(test_device)
-metric = val_metrics[0]
+translator_model = lang_module.trainable_models[str(id(seq_wiki))]
+metric = BLEU(use_generate=True, additional_sep_char="▁", progress_bar=False)
 
-# for test_dataset_id in test_datasets:
-# test_source = OPUSDataset(test_dataset_id, "test", src_lang, tgt_lang, data_dir=data_dir, firstn=test_firstn)
-test_source = wiki_val_pairs
-references = []
-hypotheses = []
-for src_text, ref_text in zip(test_source.source, test_source.target):
-    references.append(ref_text)
-    inputs = lang_module.tokenizer(src_text, truncation=True, return_tensors="pt").to(test_device)
-    outputs = translator_model.generate(**inputs)
-    translations = lang_module.tokenizer.batch_decode(outputs, remove_special_tokens=True)
-    hypotheses.append(translations[0])
+for test_dataset_id in test_datasets:
+    test_source = OPUSDataset(test_dataset_id, "test", src_lang, tgt_lang, data_dir=data_dir, firstn=test_firstn)
 
-bleu = val_metrics[0].evaluate_str(references, hypotheses)
-print("Experiment %s Test %s on %s (%s->%s): %s" %
-      (experiment_id, metric, "wikimedia", src_lang, tgt_lang, bleu))
+    references = []
+    hypotheses = []
+    for src_text, ref_text in zip(test_source.source, test_source.target):
+        references.append(ref_text)
+        inputs = lang_module.tokenizer(src_text, truncation=True, return_tensors="pt").to(test_device)
+
+        outputs = translator_model.generate(**inputs)
+        translations = lang_module.tokenizer.batch_decode(outputs, remove_special_tokens=True)
+        hypotheses.append(translations[0])
+
+    bleu = BLEU().evaluate_str(references, hypotheses)
+    print("Experiment %s Test %s on %s (%s->%s): %s" %
+          (experiment_id, metric, test_dataset_id, src_lang, tgt_lang, bleu))
