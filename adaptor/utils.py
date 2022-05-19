@@ -85,6 +85,7 @@ class AdaptationArguments(TrainingArguments):
                                   # models are separately reloadable
             "disable_tqdm": True,  # scheduler takes care of top-level terminal monitoring
             "dataloader_pin_memory": False,  # does not necessarily match the shapes in multi-objective training
+            "remove_unused_columns": False,  # from transformers 4.19.x, this would remove batches' control attributes
     }
 
     def __init__(self,
