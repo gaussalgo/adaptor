@@ -2,7 +2,7 @@ import logging
 import os
 from typing import Tuple, List, Optional
 
-from examples.data_utils import DataSource
+from utils.data_utils import DataSource
 
 # these can be easily exchanged with links to other domains and languages in MOSES format
 # see a list for your language pair in https://opus.nlpl.eu/

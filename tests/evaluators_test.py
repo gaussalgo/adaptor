@@ -126,8 +126,8 @@ def test_divergence():
 
 
 def test_token_fscore():
-    from adaptor.evaluators.token_classification import MeanPerCategoryFScore
-    assert_ner_evaluator_logs(MeanPerCategoryFScore(decides_convergence=True), "train")
+    from adaptor.evaluators.token_classification import MeanFScore
+    assert_ner_evaluator_logs(MeanFScore(decides_convergence=True), "train")
 
 
 def test_sequence_accuracy():

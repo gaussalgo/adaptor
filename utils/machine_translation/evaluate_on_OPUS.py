@@ -6,7 +6,7 @@ import argparse
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 from adaptor.evaluators.generative import BLEU
-from examples.data_utils_opus import OPUSDataset, OPUS_RESOURCES_URLS
+from utils.data_utils_opus import OPUSDataset, OPUS_RESOURCES_URLS
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
