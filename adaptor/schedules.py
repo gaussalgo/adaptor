@@ -81,7 +81,7 @@ class Schedule(abc.ABC):
         """
         out_logs = {}
         for objective in self.objectives[split].values():
-            out_logs = {**out_logs, **objective.per_objective_log(split)}
+            out_logs = {**out_logs, **objective.evaluate_and_remember(split)}
 
         return out_logs
 

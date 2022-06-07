@@ -91,7 +91,7 @@ def test_adaptation_translation():
     print(output_text)
 
 
-def test_evaluation_ner():
+def test_objective_evaluation_ner():
     # first, create a model to evaluate:
     test_adaptation_ner()
 
@@ -108,6 +108,43 @@ def test_evaluation_ner():
                                              val_labels_or_path=paths["labels"]["ner"],
                                              val_evaluators=evaluators)
 
-    evaluation = eval_ner_objective.per_objective_log("eval")
+    evaluations = eval_ner_objective.evaluate()
     for evaluator in evaluators:
-        assert "eval_%s_%s" % (eval_ner_objective, evaluator) in evaluation
+        assert evaluator in evaluations
+        assert isinstance(evaluations[evaluator], float)
+
+
+def test_adapter_evaluation_mt():
+    # 1. pick the models - randomly pre-initialize the appropriate heads
+    lang_module = LangModule(test_base_models["translation_mono"])
+
+    # (optional) pick train and validation evaluators for the objectives
+    seq2seq_evaluators = [BLEU(use_generate=True, decides_convergence=True)]
+
+    # 2. pick objectives
+    objectives = [BackTranslation(lang_module,
+                                  back_translator=BackTranslator("Helsinki-NLP/opus-mt-cs-en"),
+                                  batch_size=1,
+                                  texts_or_path=paths["texts"]["unsup"],
+                                  val_texts_or_path=paths["texts"]["unsup"]),
+                  Sequence2Sequence(lang_module, batch_size=1,
+                                    texts_or_path=paths["texts"]["translation"],
+                                    labels_or_path=paths["labels"]["translation"],
+                                    val_evaluators=seq2seq_evaluators,
+                                    val_texts_or_path=paths["texts"]["translation"],
+                                    val_labels_or_path=paths["labels"]["translation"])]
+    # 3. pick a schedule of the selected objectives
+    # this one will shuffle the batches of both objectives
+    schedule = ParallelSchedule(objectives, training_arguments)
+
+    # 4. evaluate using Adapter
+    adapter = Adapter(lang_module, schedule, training_arguments)
+    evaluations = adapter.evaluate_all_objectives()
+
+    for eval_objective in objectives:
+        assert eval_objective in evaluations
+
+        for evaluator in eval_objective.evaluators["eval"] + ["loss"]:
+            assert evaluator in evaluations[eval_objective]
+            assert isinstance(evaluations[eval_objective][evaluator], float)
+

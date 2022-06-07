@@ -20,7 +20,7 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Programming Language :: Python :: 3.8"
     ],
-    author="Michal Stefanik",
+    author="Michal Stefanik & Adaptor Authors & Contributors",
     author_email="stefanik.m@mail.muni.cz",
     url="https://github.com/gaussalgo/adaptor",
     python_requires=">=3.7",

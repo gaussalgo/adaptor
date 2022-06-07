@@ -132,9 +132,30 @@ class Objective(abc.ABC):
                 self.val_texts = val_texts_or_path
                 self.dataset_length["eval"] = len(self.val_texts)
 
-    def per_objective_log(self, split: str) -> Dict[str, float]:
+    def evaluate(self, split: str = "eval", compute_loss: bool = True) -> Dict[str, float]:
         """
         Generates a log of this objective for a given split, using Evaluators of selected split.
+        :param split: Split of the log. Either `train` or `eval`. Defaults to `eval`
+        :return: Dict of the format {split + objective_name + evaluator_name: evaluator_value}
+        """
+        evaluations: Dict[str, float] = {}
+
+        if split == "eval" and compute_loss:
+            evaluations["loss"] = self.compute_eval_loss()
+
+        for evaluator in self.evaluators[split]:
+            dataset = self.get_dataset(split, 0, self.compatible_head_model.device,
+                                       firstn=self.max_samples_per_log[split],
+                                       add_oid=False,
+                                       is_training_dataset=False)
+            # evaluator should already return an aggregated value, so unlike loss, we don't average it
+            evaluations[evaluator] = evaluator(self.compatible_head_model, self.tokenizer, dataset)
+
+        return evaluations
+
+    def evaluate_and_remember(self, split: str) -> Dict[str, float]:
+        """
+        Generates a log of this objective for a given split and remembers the results within the objective.
         :param split: Split of the log. Either `train` or `eval`.
         :return: Dict of the format {split + objective_name + evaluator_name: evaluator_value}
         """
@@ -147,14 +168,9 @@ class Objective(abc.ABC):
         out_logs["%s_%s_loss" % (split, self)] = mean_loss
         out_logs["%s_%s_num_batches" % (split, self)] = len(loss_history)
 
-        for evaluator in self.evaluators[split]:
-            dataset = self.get_dataset(split, 0, self.compatible_head_model.device,
-                                       firstn=self.max_samples_per_log[split],
-                                       add_oid=False,
-                                       is_training_dataset=False)
-            # evaluator should already return an aggregated value, so unlike loss, we don't average it
-            evaluator_value = evaluator(self.compatible_head_model, self.tokenizer, dataset)
-            self.evaluations_history[split][evaluator].append(evaluator_value)
+        for evaluator, evaluator_value in self.evaluate(split,
+                                                        compute_loss=bool(self.loss_history[split])).items():
+            self.evaluations_history[split][str(evaluator)].append(evaluator_value)
             out_logs["%s_%s_%s" % (split, self, evaluator)] = evaluator_value
 
         return out_logs
@@ -244,9 +260,29 @@ class Objective(abc.ABC):
         self.num_steps += 1
 
         if self.progressbar[split] is not None:
-            self.progressbar[split].set_postfix(refresh=False, split=split, loss=loss.item(), epoch=self.epoch)
-
+            self.progressbar[split].set_postfix(refresh=False,
+                                                split=split,
+                                                loss=(loss * self.loss_weight).item(),
+                                                epoch=self.epoch)
         return loss * self.loss_weight
+
+    def compute_eval_loss(self) -> float:
+        """
+        Computes evaluation loss of this objective -- loss contains no gradients.
+        While loss is essentially just another Evaluator, each objective has its own implementation,
+        so we can not extract it into Evaluator.
+        This method can be called in a standalone. Internally, it is called called only from evaluate()
+
+        :return: mean loss over the evaluation batches
+        """
+        with torch.no_grad():
+            losses = []
+            for batch in self.get_dataset("eval", 0, self.compatible_head_model.device, is_training_dataset=False):
+                input_batch = {k: v for k, v in batch.items() if k not in ("oid", "label", "labels")}
+                outputs = self.compatible_head_model(**input_batch)
+                losses.append(self._compute_loss(outputs.logits, batch["labels"], batch).item())
+
+        return sum(losses) / len(losses)
 
     @abc.abstractmethod
     def _get_inputs_iterator(self, split: str) -> Iterable[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
@@ -282,7 +318,7 @@ class Objective(abc.ABC):
         """
         if split == "train" and is_training_dataset:
             # increment epoch only for train split and only for the dataset used as training
-            # - get_dataset is also called from self.per_objective_log, or specific objectives
+            # - get_dataset is also called from self.evaluate_and_remember, or specific objectives
             self.epoch += 1 if split == "train" else 0
 
         if show_progressbar:

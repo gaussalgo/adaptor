@@ -46,7 +46,7 @@ class Adapter(Trainer):
         super().__init__(model=lang_module,
                          args=args,
                          train_dataset=self.schedule.iterable_dataset(split="train"),
-                         eval_dataset=self.schedule.iterable_dataset(split="eval"),
+                         eval_dataset=None,  # when using Adapter, evaluation is called directly on each Objective
                          data_collator=self.flattened_collator,
                          compute_metrics=None,  # would require a static prediction format among objectives
                          callbacks=orig_callbacks + [schedule.should_stop_check_callback()],
@@ -85,15 +85,23 @@ class Adapter(Trainer):
         return super().log({**logs, **extended_logs})
 
     def evaluate(self, *args, **kwargs) -> Dict[str, float]:
+        """
+        Evaluation method called after each eval_steps of the train(). See superclass (transformers.Trainer) for docs.
+        """
         logger.warning("Evaluating...")
         out = super(Adapter, self).evaluate(*args, **kwargs)
         if "metric_key_prefix" in kwargs:
             self.eval_metrics_prefix = kwargs["metric_key_prefix"]
 
-        # refresh exhausted evaluation iteration for possible next evaluation
-        self.eval_dataset = self.schedule.iterable_dataset("eval")
-
         return out
+
+    def evaluate_all_objectives(self) -> Dict[str, float]:
+        """
+        A method to bulk-evaluate all evaluation objectives of given schedule.
+        Unlike running adapter.evaluate(), this method will not trigger logging event
+        and will not make objectives remember current evaluation.
+        """
+        return {objective: objective.evaluate() for objective in self.schedule.objectives["eval"].values()}
 
     def save_model(self, output_dir: Optional[str] = None, **kwargs) -> None:
         # HF native reload compatibility
