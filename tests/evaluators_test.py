@@ -18,14 +18,11 @@ def assert_evaluator_logs(lang_module: LangModule, objective: Objective, split: 
     loss = objective.compute_loss(outputs, dataset_sample["labels"], dataset_sample, split)
     assert loss.item()
 
-    log = objective.evaluate_and_remember(split)
-
-    # assert that objective's id can be found in each key of the logs
-    assert all(str(objective) in k for k in log.keys())
+    log = objective.evaluate(split)
 
     for split_evaluator in objective.evaluators[split]:
         # assert that each evaluator of given split was logged and has a value of expected type
-        assert any(str(split_evaluator) in k and isinstance(v, float) for k, v in log.items())
+        assert split_evaluator in log
 
 
 gen_lang_module = LangModule(test_base_models["translation_mono"])

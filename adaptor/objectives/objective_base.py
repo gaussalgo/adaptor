@@ -170,7 +170,7 @@ class Objective(abc.ABC):
 
         for evaluator, evaluator_value in self.evaluate(split,
                                                         compute_loss=bool(self.loss_history[split])).items():
-            self.evaluations_history[split][str(evaluator)].append(evaluator_value)
+            self.evaluations_history[split][evaluator].append(evaluator_value)
             out_logs["%s_%s_%s" % (split, self, evaluator)] = evaluator_value
 
         return out_logs
