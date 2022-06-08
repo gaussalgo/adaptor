@@ -7,7 +7,9 @@ import torch
 from transformers import Trainer, BatchEncoding
 from transformers.modeling_utils import unwrap_model
 
+from .evaluators.evaluator_base import EvaluatorBase
 from .lang_module import LangModule
+from .objectives.objective_base import Objective
 from .schedules import Schedule
 from .utils import AdaptationArguments
 
@@ -95,7 +97,7 @@ class Adapter(Trainer):
 
         return out
 
-    def evaluate_all_objectives(self) -> Dict[str, float]:
+    def evaluate_all_objectives(self) -> Dict[Objective, Dict[Union[str, EvaluatorBase], float]]:
         """
         A method to bulk-evaluate all evaluation objectives of given schedule.
         Unlike running adapter.evaluate(), this method will not trigger logging event

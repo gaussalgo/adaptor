@@ -147,4 +147,3 @@ def test_adapter_evaluation_mt():
         for evaluator in eval_objective.evaluators["eval"] + ["loss"]:
             assert evaluator in evaluations[eval_objective]
             assert isinstance(evaluations[eval_objective][evaluator], float)
-

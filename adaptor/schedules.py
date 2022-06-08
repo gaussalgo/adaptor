@@ -5,8 +5,8 @@ from typing import List, Iterable, Dict, Any, Tuple, Iterator, Union, Optional
 import torch
 from transformers import TrainerCallback, TrainingArguments, TrainerState, TrainerControl, BatchEncoding
 
-from adaptor.objectives.objective_base import Objective
-from adaptor.utils import TransformerAdaptationDataset, StoppingStrategy, AdaptationArguments
+from .objectives.objective_base import Objective
+from .utils import TransformerAdaptationDataset, StoppingStrategy, AdaptationArguments
 
 logger = logging.getLogger()
 

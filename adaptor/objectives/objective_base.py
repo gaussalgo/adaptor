@@ -132,13 +132,13 @@ class Objective(abc.ABC):
                 self.val_texts = val_texts_or_path
                 self.dataset_length["eval"] = len(self.val_texts)
 
-    def evaluate(self, split: str = "eval", compute_loss: bool = True) -> Dict[str, float]:
+    def evaluate(self, split: str = "eval", compute_loss: bool = True) -> Dict[Union[str, EvaluatorBase], float]:
         """
         Generates a log of this objective for a given split, using Evaluators of selected split.
         :param split: Split of the log. Either `train` or `eval`. Defaults to `eval`
         :return: Dict of the format {split + objective_name + evaluator_name: evaluator_value}
         """
-        evaluations: Dict[str, float] = {}
+        evaluations: Dict[Union[str, EvaluatorBase], float] = {}
 
         if split == "eval" and compute_loss:
             evaluations["loss"] = self.compute_eval_loss()
