@@ -447,12 +447,16 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
     val_labels_path: Optional[str] = None
     val_labels: Optional[List[str]] = None
 
+    text_pair_path: Optional[str] = None
+    text_pair: Optional[List[str]] = None
+    
     labels_map: Dict[str, int] = {}
 
     def __init__(self,
                  *args,
                  labels_or_path: Union[str, List[str]],
                  val_labels_or_path: Optional[Union[str, List[str]]] = None,
+                 text_pair_or_path: Optional[Union[str, List[str]]] = None,
                  **kwargs):
 
         if isinstance(labels_or_path, str):
@@ -465,6 +469,12 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                 self.val_labels_path = val_labels_or_path
             else:
                 self.val_labels = val_labels_or_path
+
+        if text_pair_or_path is not None:
+            if isinstance(text_pair_or_path, str):
+                self.text_pair_path = text_pair_or_path
+            else:
+                self.text_pair = text_pair_or_path
 
         # init will call register_compatible_head_model, which resolves num_labels for new head config from self.labels
         super().__init__(*args, **kwargs)
