@@ -13,7 +13,8 @@ class Head(Enum):
     SEQ2SEQ = 4
     CLM = 5
     MLM = 6
-    UNKNOWN = 7
+    QA = 7
+    UNKNOWN = 8
 
 
 class StoppingStrategy(Enum):

@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 import torch
 from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForSequenceClassification, \
     AutoModelForTokenClassification, AutoModelForSeq2SeqLM, AutoModelForCausalLM, \
-    AutoModelForMaskedLM
+    AutoModelForMaskedLM, AutoModelForQuestionAnswering
 
 from .utils import Head
 
@@ -57,6 +57,8 @@ class LangModule(torch.nn.Module):
             new_head = AutoModelForCausalLM.from_pretrained(model_name_or_path, **head_kwargs)
         elif head_type == Head.MLM:
             new_head = AutoModelForMaskedLM.from_pretrained(model_name_or_path, **head_kwargs)
+        elif head_type == Head.QA:
+            new_head = AutoModelForQuestionAnswering.from_pretrained(model_name_or_path, **head_kwargs)
         else:
             new_head = torch.load(model_name_or_path, **head_kwargs)
 
