@@ -118,37 +118,6 @@ class SequenceClassification(SupervisedObjective):
 
     compatible_head = Head.SEQ_CLASSIFICATION
 
-    def _get_inputs_iterator(self, split: str) -> Iterator:
-        """
-        Batches and encodes input texts and corresponding labels.
-        :param split: Selected data split. `train` or `eval`.
-        :return: Iterator over batch encodings.
-        """
-
-        collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8)
-        classifying_pairs = None
-
-        batch_features = []
-        for src_text, label in zip(*self._per_split_iterators(split)):
-            # check from the first sample
-            if classifying_pairs is None:
-                # if the input texts are tab-separated we will tokenize them as pairs
-                classifying_pairs = "\t" in src_text
-            if classifying_pairs:
-                text, text_pair = src_text.split("\t")
-                out_sample = self.tokenizer(text, text_pair=text_pair, truncation=True)
-            else:
-                out_sample = self.tokenizer(src_text, truncation=True)
-            out_sample["label"] = torch.tensor(self.labels_map[label])
-            batch_features.append(out_sample)
-            if len(batch_features) == self.batch_size:
-                yield collator(batch_features)
-                batch_features = []
-
-        if batch_features:
-            # yield residual batch
-            yield collator(batch_features)
-
     def _compute_loss(self,
                       logit_outputs: torch.FloatTensor,
                       labels: torch.LongTensor,
