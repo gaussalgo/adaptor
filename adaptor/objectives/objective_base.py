@@ -1,11 +1,11 @@
 import abc
 import itertools
 import logging
-from typing import List, Union, Optional, Iterable, Tuple, Dict, Sequence, Any
+from typing import List, Union, Optional, Iterable, Tuple, Dict, Sequence, Any, Iterator
 
 import torch
 from tqdm import trange
-from transformers import BatchEncoding
+from transformers import BatchEncoding, DataCollatorWithPadding
 
 from ..evaluators.evaluator_base import EvaluatorBase
 from ..lang_module import LangModule
@@ -510,6 +510,83 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
 
         return super().register_compatible_head_model(lang_module, other_objective,
                                                       objective_args_for_head_config, preloaded_module)
+
+    def _get_inputs_iterator(self, split: str) -> Iterator:
+            """
+            Batches and encodes input texts and corresponding labels.
+            :param split: Selected data split. `train` or `eval`.
+            :return: Iterator over batch encodings.
+            """
+
+            collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8)
+            classifying_pairs = None
+
+            batch_features = []
+            if self.text_pair is None and self.text_pair_path is None:
+                for src_text, label in zip(*self._per_split_iterators(split)):
+                    # check from the first sample
+                    if classifying_pairs is None:
+                        # if the input texts are tab-separated we will tokenize them as pairs
+                        classifying_pairs = "\t" in src_text
+                    if classifying_pairs:
+                        text, text_pair = src_text.split("\t")
+                        out_sample = self.tokenizer(text, text_pair=text_pair, truncation=True)
+                    else:
+                        out_sample = self.tokenizer(src_text, truncation=True)
+                    out_sample["label"] = torch.tensor(self.labels_map[label])
+                    batch_features.append(out_sample)
+                    if len(batch_features) == self.batch_size:
+                        yield collator(batch_features)
+                        batch_features = []
+            
+            else:
+                for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
+                    # check from the first sample
+                    out_sample = self.tokenizer(text, text_pair=text_pair, truncation=True)
+                    out_sample["label"] = torch.tensor(self.labels_map[label])
+                    batch_features.append(out_sample)
+                    if len(batch_features) == self.batch_size:
+                        yield collator(batch_features)
+                        batch_features = []
+
+            if batch_features:
+                # yield residual batch
+                yield collator(batch_features)
+    
+    def _per_split_iterators_text_pair(self, split: str) -> Tuple[Iterable[str],Iterable[str], Iterable[str]]:
+        """
+        Inputs iterator for supervised objectives in case text pairs are present.
+        Returns tuple of iterators, over input texts, text pairs and labels.
+        :param split: Data split to iterate over
+        :return: a tuple of identical [inputs_iterator, text_pairs_iterator, labels_iterator]
+        """
+        
+        sources_iter, _ = super(SupervisedObjective, self)._per_split_iterators(split)
+
+        if split == "train":
+            if self.texts is not None:
+                targets_iter = iter(self.labels)
+                text_pairs_iter = iter(self.text_pair)
+            else:
+                targets_iter = AdaptationDataset.iter_text_file_per_line(self.labels_path)
+                text_pairs_iter = AdaptationDataset.iter_text_file_per_line(self.text_pair_path)
+        elif split == "eval":
+
+            if self.val_labels is not None:
+                targets_iter = iter(self.val_labels)
+                text_pairs_iter = iter(self.text_pair)
+            elif self.val_labels_path is not None:
+                targets_iter = AdaptationDataset.iter_text_file_per_line(self.val_labels_path)
+                text_pairs_iter = AdaptationDataset.iter_text_file_per_line(self.text_pair_path)
+            else:
+                raise ValueError("Objective %s did not get any validation labels :( "
+                                 "Hint: pass `AdaptationArgs(do_eval=False)` to avoid evaluation, "
+                                 "or set Objective(val_labels) param." % self)
+        else:
+            raise ValueError("Unrecognized split: %s" % split)
+
+        return sources_iter,text_pairs_iter, targets_iter       
+
 
     def _per_split_iterators(self, split: str) -> Tuple[Iterable[str], Iterable[str]]:
         """
