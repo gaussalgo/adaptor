@@ -542,7 +542,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
             else:
                 for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
                     # check from the first sample
-                    out_sample = self.tokenizer(text, text_pair=text_pair, truncation=True)
+                    out_sample = self.tokenizer(src_text, text_pair=text_pair, truncation=True)
                     out_sample["label"] = torch.tensor(self.labels_map[label])
                     batch_features.append(out_sample)
                     if len(batch_features) == self.batch_size:
