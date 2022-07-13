@@ -42,7 +42,7 @@ setup(
             "rouge-score",
             "bert-score",
             "fairseq",
-            "protobuf",
+            "protobuf<=3.20.1",
         ],
         "examples": [
             "comet-ml",
