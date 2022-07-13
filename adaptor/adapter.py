@@ -9,7 +9,7 @@ from transformers.modeling_utils import unwrap_model
 
 from .lang_module import LangModule
 from .schedules import Schedule
-from .utils import AdaptationArguments
+from .utils import AdaptationArguments, Head
 
 logger = logging.getLogger()
 
@@ -74,7 +74,12 @@ class Adapter(Trainer):
             raise NotImplementedError()  # objective-dependent label smoothing is custom
             # loss = self.label_smoother(outputs, labels)
         else:
-            loss = self.schedule.compute_loss(outputs, labels)
+
+            if model.trainable_models[str(inputs["oid"])] == Head.QA:
+                concat_logits = torch.cat(outputs, 0)
+                loss = self.schedule.compute_loss(concat_logits, labels)
+            else:
+                loss = self.schedule.compute_loss(outputs, labels)
 
         mock_outputs = torch.tensor([-1, -1])
         return (loss, mock_outputs) if return_outputs else loss
