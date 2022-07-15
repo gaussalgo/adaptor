@@ -7,6 +7,8 @@ from transformers import DataCollatorWithPadding, BatchEncoding
 from ..objectives.objective_base import SupervisedObjective
 from ..utils import Head
 
+MAX_LENGTH = 512
+
 class ExtractiveQA(SupervisedObjective):
     compatible_head: Head = Head.QA
 
@@ -17,14 +19,13 @@ class ExtractiveQA(SupervisedObjective):
             :return: Iterator over batch encodings.
             """
 
-            collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8)
+            collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8,return_tensors = "pt", max_length=MAX_LENGTH,padding='max_length')
 
             batch_features = []
             
             for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
-                max_length = 384 #TODO check what max length and where it should be set
-                out_sample = self.tokenizer(src_text, text_pair=text_pair)
-                tokenized_label = self.tokenizer(label)
+                out_sample = self.tokenizer(src_text, text_pair=text_pair, max_length=MAX_LENGTH, truncation=True,padding='max_length')
+                tokenized_label = self.tokenizer(label, max_length=MAX_LENGTH, truncation=True,padding='max_length')
 
                 #find indexes for answer:
                 if set(tokenized_label["input_ids"][1:-1]).issubset(set(out_sample["input_ids"])): 
@@ -34,9 +35,9 @@ class ExtractiveQA(SupervisedObjective):
                     start_position=-1
                     answer_length=0
                 end_position = start_position+answer_length
-                out_sample["label"] = tokenized_label
-                out_sample["start_position"] = torch.tensor(start_position)
-                out_sample["end_position"] = torch.tensor(end_position)
+                out_sample["label"] = tokenized_label["input_ids"]
+                out_sample["start_position"] = start_position
+                out_sample["end_position"] = end_position
 
                 batch_features.append(out_sample)
                 if len(batch_features) == self.batch_size:
