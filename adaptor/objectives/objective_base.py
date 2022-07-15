@@ -449,6 +449,9 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
 
     text_pair_path: Optional[str] = None
     text_pair: Optional[List[str]] = None
+
+    val_text_pair_path: Optional[str] = None
+    val_text_pair: Optional[List[str]] = None
     
     labels_map: Dict[str, int] = {}
 
@@ -457,6 +460,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                  labels_or_path: Union[str, List[str]],
                  val_labels_or_path: Optional[Union[str, List[str]]] = None,
                  text_pair_or_path: Optional[Union[str, List[str]]] = None,
+                 val_text_pair_or_path: Optional[Union[str, List[str]]] = None,
                  **kwargs):
 
         if isinstance(labels_or_path, str):
@@ -475,6 +479,12 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                 self.text_pair_path = text_pair_or_path
             else:
                 self.text_pair = text_pair_or_path
+        
+        if val_text_pair_or_path is not None:
+            if isinstance(val_text_pair_or_path, str):
+                self.val_text_pair_path = val_text_pair_or_path
+            else:
+                self.val_text_pair = val_text_pair_or_path
 
         # init will call register_compatible_head_model, which resolves num_labels for new head config from self.labels
         super().__init__(*args, **kwargs)
@@ -574,10 +584,10 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
 
             if self.val_labels is not None:
                 targets_iter = iter(self.val_labels)
-                text_pairs_iter = iter(self.text_pair)
+                text_pairs_iter = iter(self.val_text_pair)
             elif self.val_labels_path is not None:
                 targets_iter = AdaptationDataset.iter_text_file_per_line(self.val_labels_path)
-                text_pairs_iter = AdaptationDataset.iter_text_file_per_line(self.text_pair_path)
+                text_pairs_iter = AdaptationDataset.iter_text_file_per_line(self.val_text_pair_path)
             else:
                 raise ValueError("Objective %s did not get any validation labels :( "
                                  "Hint: pass `AdaptationArgs(do_eval=False)` to avoid evaluation, "
