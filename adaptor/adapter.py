@@ -74,12 +74,7 @@ class Adapter(Trainer):
             raise NotImplementedError()  # objective-dependent label smoothing is custom
             # loss = self.label_smoother(outputs, labels)
         else:
-
-            if model.trainable_models[str(inputs["oid"])] == Head.QA:
-                concat_logits = torch.cat(outputs, 0)
-                loss = self.schedule.compute_loss(concat_logits, labels)
-            else:
-                loss = self.schedule.compute_loss(outputs, labels)
+            loss = self.schedule.compute_loss(outputs, labels, inputs)
 
         mock_outputs = torch.tensor([-1, -1])
         return (loss, mock_outputs) if return_outputs else loss
