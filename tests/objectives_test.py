@@ -5,6 +5,7 @@ from adaptor.objectives.backtranslation import BackTranslation, BackTranslator
 from adaptor.objectives.classification import TokenClassification
 from adaptor.objectives.denoising import DenoisingObjective
 from adaptor.objectives.objective_base import Objective
+from adaptor.objectives.question_answering import ExtractiveQA
 from adaptor.objectives.seq2seq import Sequence2Sequence
 from utils import paths, test_base_models
 
@@ -121,5 +122,17 @@ def test_supervised_seq2seq_objective_mbart():
                                   batch_size=4,
                                   source_lang_id=test_base_models["translation_multi"]["test_src_lang"],
                                   target_lang_id=test_base_models["translation_multi"]["test_tgt_lang"])
+
+    assert_module_objective_ok(lang_module, objective)
+
+
+def test_supervised_QA_objective():
+    lang_module = LangModule(test_base_models["extractive_QA"])
+
+    objective = ExtractiveQA(lang_module,
+                                  texts_or_path=paths["texts"]["QA"],
+                                  text_pair_or_path = paths["text_pair"]["QA"],
+                                  labels_or_path=paths["labels"]["QA"],
+                                  batch_size=4,)
 
     assert_module_objective_ok(lang_module, objective)
