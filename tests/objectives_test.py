@@ -126,13 +126,13 @@ def test_supervised_seq2seq_objective_mbart():
     assert_module_objective_ok(lang_module, objective)
 
 
-def test_supervised_QA_objective():
+def test_supervised_qa_objective():
     lang_module = LangModule(test_base_models["extractive_QA"])
 
     objective = ExtractiveQA(lang_module,
-                                  texts_or_path=paths["texts"]["QA"],
-                                  text_pair_or_path = paths["text_pair"]["QA"],
-                                  labels_or_path=paths["labels"]["QA"],
-                                  batch_size=4,)
+                             texts_or_path=paths["texts"]["QA"],
+                             text_pair_or_path=paths["text_pair"]["QA"],
+                             labels_or_path=paths["labels"]["QA"],
+                             batch_size=4, )
 
     assert_module_objective_ok(lang_module, objective)

@@ -11,7 +11,6 @@ from ..evaluators.evaluator_base import EvaluatorBase
 from ..lang_module import LangModule
 from ..utils import AdaptationDataset, Head, TransformerAdaptationDataset
 
-
 logger = logging.getLogger()
 
 
@@ -440,7 +439,6 @@ class UnsupervisedObjective(Objective, abc.ABC):
 
 
 class SupervisedObjective(UnsupervisedObjective, abc.ABC):
-
     labels_path: Optional[str] = None
     labels: Optional[List[str]] = None
 
@@ -452,7 +450,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
 
     val_text_pair_path: Optional[str] = None
     val_text_pair: Optional[List[str]] = None
-    
+
     labels_map: Dict[str, int] = {}
 
     def __init__(self,
@@ -479,7 +477,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                 self.text_pair_path = text_pair_or_path
             else:
                 self.text_pair = text_pair_or_path
-        
+
         if val_text_pair_or_path is not None:
             if isinstance(val_text_pair_or_path, str):
                 self.val_text_pair_path = val_text_pair_or_path
@@ -522,33 +520,33 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                                                       objective_args_for_head_config, preloaded_module)
 
     def _get_inputs_iterator(self, split: str) -> Iterator:
-            """
-            Batches and encodes input texts and corresponding labels.
-            :param split: Selected data split. `train` or `eval`.
-            :return: Iterator over batch encodings.
-            """
+        """
+        Batches and encodes input texts and corresponding labels.
+        :param split: Selected data split. `train` or `eval`.
+        :return: Iterator over batch encodings.
+        """
 
-            collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8)
-            classifying_pairs = None
+        collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8)
+        classifying_pairs = None
 
-            batch_features = []
-            if self.text_pair is None and self.text_pair_path is None:
-                for src_text, label in zip(*self._per_split_iterators(split)):
-                    # check from the first sample
-                    if classifying_pairs is None:
-                        # if the input texts are tab-separated we will tokenize them as pairs
-                        classifying_pairs = "\t" in src_text
-                    if classifying_pairs:
-                        text, text_pair = src_text.split("\t")
-                        out_sample = self.tokenizer(text, text_pair=text_pair, truncation=True)
-                    else:
-                        out_sample = self.tokenizer(src_text, truncation=True)
-                    out_sample["label"] = torch.tensor(self.labels_map[label])
-                    batch_features.append(out_sample)
-                    if len(batch_features) == self.batch_size:
-                        yield collator(batch_features)
-                        batch_features = []
-            
+        batch_features = []
+        if self.text_pair is None and self.text_pair_path is None:
+            for src_text, label in zip(*self._per_split_iterators(split)):
+                # check from the first sample
+                if classifying_pairs is None:
+                    # if the input texts are tab-separated we will tokenize them as pairs
+                    classifying_pairs = "\t" in src_text
+                if classifying_pairs:
+                    text, text_pair = src_text.split("\t")
+                    out_sample = self.tokenizer(text, text_pair=text_pair, truncation=True)
+                else:
+                    out_sample = self.tokenizer(src_text, truncation=True)
+                out_sample["label"] = torch.tensor(self.labels_map[label])
+                batch_features.append(out_sample)
+                if len(batch_features) == self.batch_size:
+                    yield collator(batch_features)
+                    batch_features = []
+
             else:
                 for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
                     # check from the first sample
@@ -562,15 +560,14 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
             if batch_features:
                 # yield residual batch
                 yield collator(batch_features)
-    
-    def _per_split_iterators_text_pair(self, split: str) -> Tuple[Iterable[str],Iterable[str], Iterable[str]]:
+
+    def _per_split_iterators_text_pair(self, split: str) -> Tuple[Iterable[str], Iterable[str], Iterable[str]]:
         """
         Inputs iterator for supervised objectives in case text pairs are present.
         Returns tuple of iterators, over input texts, text pairs and labels.
         :param split: Data split to iterate over
         :return: a tuple of identical [inputs_iterator, text_pairs_iterator, labels_iterator]
         """
-        
         sources_iter, _ = super(SupervisedObjective, self)._per_split_iterators(split)
 
         if split == "train":
@@ -595,8 +592,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
         else:
             raise ValueError("Unrecognized split: %s" % split)
 
-        return sources_iter,text_pairs_iter, targets_iter       
-
+        return sources_iter, text_pairs_iter, targets_iter
 
     def _per_split_iterators(self, split: str) -> Tuple[Iterable[str], Iterable[str]]:
         """

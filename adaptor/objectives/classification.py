@@ -1,14 +1,13 @@
-from typing import Dict, Iterable, Optional, Iterator, Union
+from typing import Dict, Iterable, Optional, Union
 
 import torch
-from transformers import DataCollatorForTokenClassification, DataCollatorWithPadding, BatchEncoding
+from transformers import DataCollatorForTokenClassification, BatchEncoding
 
 from ..objectives.objective_base import SupervisedObjective
 from ..utils import Head
 
 
 class TokenClassification(SupervisedObjective):
-
     compatible_head = Head.TOKEN_CLASSIFICATION
 
     def _wordpiece_token_label_alignment(self, texts: Iterable[str],
@@ -105,7 +104,7 @@ class TokenClassification(SupervisedObjective):
             active_loss = attention_mask.view(-1) == 1
             active_logits = logit_outputs.view(-1, len(self.labels_map))
             active_labels = torch.where(
-                    active_loss, labels.view(-1), torch.tensor(loss_fct.ignore_index).type_as(labels)
+                active_loss, labels.view(-1), torch.tensor(loss_fct.ignore_index).type_as(labels)
             )
             loss = loss_fct(active_logits, active_labels)
         else:
@@ -115,7 +114,6 @@ class TokenClassification(SupervisedObjective):
 
 
 class SequenceClassification(SupervisedObjective):
-
     compatible_head = Head.SEQ_CLASSIFICATION
 
     def _compute_loss(self,
