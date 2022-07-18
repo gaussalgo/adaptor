@@ -4,9 +4,6 @@ from typing import Dict, Optional, Union, Iterator
 import torch
 from transformers import DataCollatorWithPadding, BatchEncoding
 
-from ..objectives.objective_base import SupervisedObjective
-from ..utils import Head
-
 MAX_LENGTH = 512
 
 
