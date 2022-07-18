@@ -151,7 +151,7 @@ class Objective(abc.ABC):
         """
         out_logs = {}
         # aggregate per-progress_bar-steps, or per-evaluation-steps, keep the results of unprocessed evaluations
-        loss_history = self.loss_history[split][-self.max_samples_per_log[split] :]
+        loss_history = self.loss_history[split][-self.max_samples_per_log[split]:]
         mean_loss = sum(loss_history) / len(loss_history) if len(loss_history) else 0
         self.evaluations_history[split]["loss"].append(mean_loss)
 

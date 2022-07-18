@@ -9,7 +9,7 @@ from transformers.modeling_utils import unwrap_model
 
 from .lang_module import LangModule
 from .schedules import Schedule
-from .utils import AdaptationArguments, Head
+from .utils import AdaptationArguments
 
 logger = logging.getLogger()
 
