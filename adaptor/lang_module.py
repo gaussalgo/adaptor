@@ -3,9 +3,16 @@ import inspect
 from typing import List, Dict, Any, Optional
 
 import torch
-from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForSequenceClassification, \
-    AutoModelForTokenClassification, AutoModelForSeq2SeqLM, AutoModelForCausalLM, \
-    AutoModelForMaskedLM, AutoModelForQuestionAnswering
+from transformers import (
+    PreTrainedTokenizer,
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
+    AutoModelForSeq2SeqLM,
+    AutoModelForCausalLM,
+    AutoModelForMaskedLM,
+    AutoModelForQuestionAnswering,
+)
 
 from .utils import Head
 
@@ -37,9 +44,9 @@ class LangModule(torch.nn.Module):
         self.trainable_models = torch.nn.ModuleDict()
 
     @staticmethod
-    def load_head(model_name_or_path: str,
-                  head_type: Head,
-                  head_kwargs: Dict[str, Any]) -> torch.nn.Module:
+    def load_head(
+        model_name_or_path: str, head_type: Head, head_kwargs: Dict[str, Any]
+    ) -> torch.nn.Module:
         """
         Returns transformers model with a head of the requested type.
         :param model_name_or_path: base model identifier
@@ -49,27 +56,41 @@ class LangModule(torch.nn.Module):
         """
 
         if head_type == Head.SEQ_CLASSIFICATION:
-            new_head = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, **head_kwargs)
+            new_head = AutoModelForSequenceClassification.from_pretrained(
+                model_name_or_path, **head_kwargs
+            )
         elif head_type == Head.TOKEN_CLASSIFICATION:
-            new_head = AutoModelForTokenClassification.from_pretrained(model_name_or_path, **head_kwargs)
+            new_head = AutoModelForTokenClassification.from_pretrained(
+                model_name_or_path, **head_kwargs
+            )
         elif head_type == Head.SEQ2SEQ:
-            new_head = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, **head_kwargs)
+            new_head = AutoModelForSeq2SeqLM.from_pretrained(
+                model_name_or_path, **head_kwargs
+            )
         elif head_type == Head.CLM:
-            new_head = AutoModelForCausalLM.from_pretrained(model_name_or_path, **head_kwargs)
+            new_head = AutoModelForCausalLM.from_pretrained(
+                model_name_or_path, **head_kwargs
+            )
         elif head_type == Head.MLM:
-            new_head = AutoModelForMaskedLM.from_pretrained(model_name_or_path, **head_kwargs)
+            new_head = AutoModelForMaskedLM.from_pretrained(
+                model_name_or_path, **head_kwargs
+            )
         elif head_type == Head.QA:
-            new_head = AutoModelForQuestionAnswering.from_pretrained(model_name_or_path, **head_kwargs)
+            new_head = AutoModelForQuestionAnswering.from_pretrained(
+                model_name_or_path, **head_kwargs
+            )
         else:
             new_head = torch.load(model_name_or_path, **head_kwargs)
 
         return new_head
 
-    def load_training_head(self,
-                           head_type: Head,
-                           objective_id: str,
-                           head_kwargs: Optional[Dict[str, Any]] = None,
-                           new_head: Optional[torch.nn.Module] = None) -> torch.nn.Module:
+    def load_training_head(
+        self,
+        head_type: Head,
+        objective_id: str,
+        head_kwargs: Optional[Dict[str, Any]] = None,
+        new_head: Optional[torch.nn.Module] = None,
+    ) -> torch.nn.Module:
         """
         Registers a selected model to this LangModule, i.e. merges its weights with first one of self.trainable_models,
         and registers new model into self.trainable_models[objective_id].
@@ -89,17 +110,22 @@ class LangModule(torch.nn.Module):
 
         # this applies to the 2nd+ -added models: they adopt the shared parameters of the first lang_module
         if len(self.trainable_models) >= 1:
-            unmatched_modules = self._partially_merge_models(list(self.trainable_models.values())[0], new_head)
+            unmatched_modules = self._partially_merge_models(
+                list(self.trainable_models.values())[0], new_head
+            )
             # this can contain a deep stack of layers, hence in general, it can not be checked automatically
-            logger.warning("These layers of the loaded %s were not merged: %s" % (head_type.name, unmatched_modules))
+            logger.warning(
+                "These layers of the loaded %s were not merged: %s"
+                % (head_type.name, unmatched_modules)
+            )
         self.trainable_models[objective_id] = new_head
 
         return new_head
 
     @staticmethod
-    def _partially_merge_models(orig_model: torch.nn.Module,
-                                new_model: torch.nn.Module,
-                                top_level: bool = True) -> List[str]:
+    def _partially_merge_models(
+        orig_model: torch.nn.Module, new_model: torch.nn.Module, top_level: bool = True
+    ) -> List[str]:
         """
         Matches and merges shared parameters of the models.
         Presumes that a vocabulary (tokenizer) of the both models does match (assured by shared self.tokenizer).
@@ -121,25 +147,35 @@ class LangModule(torch.nn.Module):
                     new_model_param = getattr(new_model, new_param_key)
                     orig_model_param = getattr(orig_model, new_param_key)
                     if orig_model_param.shape == new_model_param.shape and torch.all(
-                            orig_model_param == new_model_param):
+                        orig_model_param == new_model_param
+                    ):
                         setattr(new_model, new_param_key, orig_model_param)
-                        assert id(getattr(orig_model, new_param_key)) == id(getattr(new_model, new_param_key))
+                        assert id(getattr(orig_model, new_param_key)) == id(
+                            getattr(new_model, new_param_key)
+                        )
         else:
             # non-leaf node -> merge in a separate branch
             for child_attr, child_module in children.items():
                 if hasattr(orig_model, child_attr):
-                    unmatched_modules += LangModule._partially_merge_models(getattr(orig_model, child_attr),
-                                                                            getattr(new_model, child_attr),
-                                                                            top_level=False)
+                    unmatched_modules += LangModule._partially_merge_models(
+                        getattr(orig_model, child_attr),
+                        getattr(new_model, child_attr),
+                        top_level=False,
+                    )
                 else:
-                    unmatched_modules += list(dict(getattr(new_model, child_attr).named_parameters()).keys())
+                    unmatched_modules += list(
+                        dict(getattr(new_model, child_attr).named_parameters()).keys()
+                    )
         # check that merge-able modules now refer to the same physical address
         if top_level:
-            for i, (new_param_key, orig_model_param) in enumerate(orig_model.named_parameters()):
+            for i, (new_param_key, orig_model_param) in enumerate(
+                orig_model.named_parameters()
+            ):
                 if new_param_key in dict(new_model.named_parameters()):
                     new_model_param = new_model.get_parameter(new_param_key)
-                    if orig_model_param.shape == new_model_param.shape and \
-                            torch.all(orig_model_param == new_model_param):
+                    if orig_model_param.shape == new_model_param.shape and torch.all(
+                        orig_model_param == new_model_param
+                    ):
                         assert id(new_model_param) == id(orig_model_param)
 
         return unmatched_modules
@@ -152,14 +188,22 @@ class LangModule(torch.nn.Module):
         """
         selected_head_model = self.trainable_models[str(inputs["oid"])]
         # include only correct inputs for a specific model
-        list_of_model_specific_inputs = inspect.getfullargspec(selected_head_model.forward).args
-        model_specific_inputs  = {k: v for k, v in inputs.items() if k in list_of_model_specific_inputs}
+        list_of_model_specific_inputs = inspect.getfullargspec(
+            selected_head_model.forward
+        ).args
+        model_specific_inputs = {
+            k: v for k, v in inputs.items() if k in list_of_model_specific_inputs
+        }
 
         # including labels cause the loss to be computed twice - by objective + by HF models forward()
         # but labels are also used to infer decoder_input_ids of some models, so we need to pass it
         selected_head_output = selected_head_model(**model_specific_inputs)
         # HF models produce special Output objects instead of a raw output
-        logits = selected_head_output.logits if hasattr(selected_head_output, "logits") else selected_head_output
+        logits = (
+            selected_head_output.logits
+            if hasattr(selected_head_output, "logits")
+            else selected_head_output
+        )
 
         return logits
 
@@ -168,6 +212,7 @@ class LangModule(torch.nn.Module):
         Resets the trainable weights of all trainable_models.
         :param seed: Seed value for deterministic reinitialization.
         """
+
         def reinit_model_weights(m: torch.nn.Module):
             if hasattr(m, "children"):
                 for m_child in m.children():

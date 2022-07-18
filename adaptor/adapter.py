@@ -27,7 +27,13 @@ class Adapter(Trainer):
     permitted_args = ["args", "tokenizer", "callbacks", "optimizers"]
     eval_metrics_prefix = "eval"
 
-    def __init__(self, lang_module: LangModule, schedule: Schedule, args: AdaptationArguments, **kwargs):
+    def __init__(
+        self,
+        lang_module: LangModule,
+        schedule: Schedule,
+        args: AdaptationArguments,
+        **kwargs,
+    ):
         """
         Initialises Adapter, used in the same way as HuggingFace Trainer, refer to its documentation for more features.
         :param lang_module: Wrapper of multi-head model with registered heads for each objective of `schedule`.
@@ -37,20 +43,24 @@ class Adapter(Trainer):
         """
         unexpected_args = [k for k in kwargs.keys() if k not in self.permitted_args]
         if unexpected_args:
-            raise ValueError("Adapter(**kwargs) got these unexpected kwargs: %s" % unexpected_args)
+            raise ValueError(
+                "Adapter(**kwargs) got these unexpected kwargs: %s" % unexpected_args
+            )
 
         self.schedule = schedule
 
         orig_callbacks = [] if "callbacks" not in kwargs else kwargs.pop("callbacks")
 
-        super().__init__(model=lang_module,
-                         args=args,
-                         train_dataset=self.schedule.iterable_dataset(split="train"),
-                         eval_dataset=self.schedule.iterable_dataset(split="eval"),
-                         data_collator=self.flattened_collator,
-                         compute_metrics=None,  # would require a static prediction format among objectives
-                         callbacks=orig_callbacks + [schedule.should_stop_check_callback()],
-                         **kwargs)
+        super().__init__(
+            model=lang_module,
+            args=args,
+            train_dataset=self.schedule.iterable_dataset(split="train"),
+            eval_dataset=self.schedule.iterable_dataset(split="eval"),
+            data_collator=self.flattened_collator,
+            compute_metrics=None,  # would require a static prediction format among objectives
+            callbacks=orig_callbacks + [schedule.should_stop_check_callback()],
+            **kwargs,
+        )
 
     @staticmethod
     def flattened_collator(features: List[BatchEncoding]) -> BatchEncoding:
@@ -59,14 +69,18 @@ class Adapter(Trainer):
 
         :return: loss and a placeholder of unused outputs, for compatibility
         """
-        assert len(features) == 1, "Sorry, for multi-GPU training, we only support DistributedDataParallel for now."
+        assert (
+            len(features) == 1
+        ), "Sorry, for multi-GPU training, we only support DistributedDataParallel for now."
 
         return features[0]
 
-    def compute_loss(self,
-                     model: LangModule,
-                     inputs: Dict[str, torch.Tensor],
-                     return_outputs: bool = False) -> Union[torch.FloatTensor, Tuple[torch.FloatTensor, None]]:
+    def compute_loss(
+        self,
+        model: LangModule,
+        inputs: Dict[str, torch.Tensor],
+        return_outputs: bool = False,
+    ) -> Union[torch.FloatTensor, Tuple[torch.FloatTensor, None]]:
         labels = inputs["labels"] if "labels" in inputs else inputs["label"]
 
         outputs = model(**inputs)
@@ -81,7 +95,9 @@ class Adapter(Trainer):
 
     def log(self, logs: List[Dict[str, float]]) -> None:
         is_eval_log = any(self.eval_metrics_prefix in log_key for log_key in logs)
-        extended_logs = self.schedule.objectives_log(split="eval" if is_eval_log else "train")
+        extended_logs = self.schedule.objectives_log(
+            split="eval" if is_eval_log else "train"
+        )
         return super().log({**logs, **extended_logs})
 
     def evaluate(self, *args, **kwargs) -> Dict[str, float]:
@@ -97,7 +113,9 @@ class Adapter(Trainer):
 
     def save_model(self, output_dir: Optional[str] = None, **kwargs) -> None:
         # HF native reload compatibility
-        objectives_counter = {str(obj): 0 for obj in self.schedule.objectives["train"].values()}
+        objectives_counter = {
+            str(obj): 0 for obj in self.schedule.objectives["train"].values()
+        }
 
         for objective_id in self.schedule.objectives["train"].keys():
             module = self.model.trainable_models[str(objective_id)]
@@ -113,11 +131,17 @@ class Adapter(Trainer):
             self.model.tokenizer.save_pretrained(output_module_path)
             torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
 
-            if hasattr(module, "save_pretrained") or hasattr(unwrap_model(module), "save_pretrained"):
+            if hasattr(module, "save_pretrained") or hasattr(
+                unwrap_model(module), "save_pretrained"
+            ):
                 # if the head module has "save_pretrained" method, it will be called for persistence
                 module.save_pretrained(output_module_path, use_diff=True)
             else:
                 # otherwise, we persist only a raw pytorch module
-                torch.save(module.state_dict(), os.path.join(output_module_path, WEIGHTS_NAME))
+                torch.save(
+                    module.state_dict(), os.path.join(output_module_path, WEIGHTS_NAME)
+                )
 
-            logger.info(f"Model of objective {str(objective)} saved in {output_module_path}")
+            logger.info(
+                f"Model of objective {str(objective)} saved in {output_module_path}"
+            )
