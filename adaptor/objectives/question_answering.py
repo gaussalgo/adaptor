@@ -10,7 +10,6 @@ MAX_LENGTH = 512
 
 
 class ExtractiveQA(SupervisedObjective):
-
     compatible_head: Head = Head.QA
 
     def _get_inputs_iterator(self, split: str) -> Iterator:
@@ -20,19 +19,13 @@ class ExtractiveQA(SupervisedObjective):
         :return: Iterator over batch encodings.
         """
 
-        collator = DataCollatorWithPadding(self.tokenizer,
-                                           pad_to_multiple_of=8,
-                                           return_tensors="pt",
-                                           max_length=MAX_LENGTH,
-                                           padding='max_length')
+        collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8, return_tensors="pt",
+                                           max_length=MAX_LENGTH, padding='max_length')
 
         batch_features = []
 
         for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
-            out_sample = self.tokenizer(src_text,
-                                        text_pair=text_pair,
-                                        max_length=MAX_LENGTH,
-                                        truncation=True,
+            out_sample = self.tokenizer(src_text, text_pair=text_pair, max_length=MAX_LENGTH, truncation=True,
                                         padding='max_length')
             tokenized_label = self.tokenizer(label, max_length=MAX_LENGTH, truncation=True, padding='max_length')
             label_wo_padding = self.tokenizer(label)
@@ -43,7 +36,6 @@ class ExtractiveQA(SupervisedObjective):
             else:
                 start_position = 0
                 answer_length = 0
-
             end_position = start_position + answer_length
             out_sample["label"] = tokenized_label["input_ids"]
             out_sample["start_position"] = start_position

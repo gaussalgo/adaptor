@@ -126,7 +126,7 @@ def test_supervised_seq2seq_objective_mbart():
     assert_module_objective_ok(lang_module, objective)
 
 
-def test_supervised_qa_objective():
+def test_supervised_QA_objective():
     lang_module = LangModule(test_base_models["extractive_QA"])
 
     objective = ExtractiveQA(lang_module,

@@ -168,7 +168,6 @@ class LangModule(torch.nn.Module):
         Resets the trainable weights of all trainable_models.
         :param seed: Seed value for deterministic reinitialization.
         """
-
         def reinit_model_weights(m: torch.nn.Module):
             if hasattr(m, "children"):
                 for m_child in m.children():

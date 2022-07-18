@@ -547,19 +547,19 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                     yield collator(batch_features)
                     batch_features = []
 
-            else:
-                for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
-                    # check from the first sample
-                    out_sample = self.tokenizer(src_text, text_pair=text_pair, truncation=True)
-                    out_sample["label"] = torch.tensor(self.labels_map[label])
-                    batch_features.append(out_sample)
-                    if len(batch_features) == self.batch_size:
-                        yield collator(batch_features)
-                        batch_features = []
+        else:
+            for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
+                # check from the first sample
+                out_sample = self.tokenizer(src_text, text_pair=text_pair, truncation=True)
+                out_sample["label"] = torch.tensor(self.labels_map[label])
+                batch_features.append(out_sample)
+                if len(batch_features) == self.batch_size:
+                    yield collator(batch_features)
+                    batch_features = []
 
-            if batch_features:
-                # yield residual batch
-                yield collator(batch_features)
+        if batch_features:
+            # yield residual batch
+            yield collator(batch_features)
 
     def _per_split_iterators_text_pair(self, split: str) -> Tuple[Iterable[str], Iterable[str], Iterable[str]]:
         """
@@ -568,6 +568,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
         :param split: Data split to iterate over
         :return: a tuple of identical [inputs_iterator, text_pairs_iterator, labels_iterator]
         """
+
         sources_iter, _ = super(SupervisedObjective, self)._per_split_iterators(split)
 
         if split == "train":
