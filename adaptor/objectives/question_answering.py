@@ -2,6 +2,7 @@ from typing import Dict, Optional, Union, Iterator
 
 import torch
 from transformers import DataCollatorWithPadding, BatchEncoding
+from transformers.modeling_outputs import QuestionAnsweringModelOutput
 
 from ..objectives.objective_base import SupervisedObjective
 from ..utils import Head
@@ -51,21 +52,22 @@ class ExtractiveQA(SupervisedObjective):
             yield collator(batch_features)
 
     def _compute_loss(self,
-                      logit_outputs: torch.FloatTensor,
+                      model_outputs: QuestionAnsweringModelOutput,
                       labels: torch.LongTensor,
                       inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
                       attention_mask: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         """
         Computes a loss for model outputs on a single question answering batch.
-        :param logit_outputs: Token Classification model raw outputs.
+        :param model_outputs: QuestionAnsweringModelOutput.
         :param labels: Expected labels.
         :param attention_mask: Mask of the tokens to compute loss on.
         :return: loss value with grad_fn.
         """
         loss_fct = torch.nn.CrossEntropyLoss()
-        # split concatonated outputs for start and end:
-        start_logits = logit_outputs["start_logits"]
-        end_logits = logit_outputs["end_logits"]
+
+        # following keys need to be present in the model output
+        start_logits = model_outputs["start_logits"]
+        end_logits = model_outputs["end_logits"]
 
         start_positions = inputs["start_position"]
         end_positions = inputs["end_position"]
