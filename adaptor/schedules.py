@@ -3,10 +3,20 @@ import logging
 from typing import List, Iterable, Dict, Any, Tuple, Iterator, Union, Optional
 
 import torch
-from transformers import TrainerCallback, TrainingArguments, TrainerState, TrainerControl, BatchEncoding
+from transformers import (
+    TrainerCallback,
+    TrainingArguments,
+    TrainerState,
+    TrainerControl,
+    BatchEncoding,
+)
 
 from adaptor.objectives.objective_base import Objective
-from adaptor.utils import TransformerAdaptationDataset, StoppingStrategy, AdaptationArguments
+from adaptor.utils import (
+    TransformerAdaptationDataset,
+    StoppingStrategy,
+    AdaptationArguments,
+)
 
 logger = logging.getLogger()
 
@@ -27,10 +37,12 @@ class Schedule(abc.ABC):
     converged_objectives: List[Objective]
     should_stop: bool
 
-    def __init__(self,
-                 objectives: List[Objective],
-                 args: AdaptationArguments,
-                 extra_eval_objectives: Iterable[Objective] = ()):
+    def __init__(
+        self,
+        objectives: List[Objective],
+        args: AdaptationArguments,
+        extra_eval_objectives: Iterable[Objective] = (),
+    ):
         """
         Initialises queues of objectives outputs and training flow modification parameters.
         :param objectives: Training objectives to be scheduled
@@ -40,8 +52,10 @@ class Schedule(abc.ABC):
         """
 
         # eval objectives = train + eval => train objectives are evaluated implicitly
-        self.objectives = {"train": {id(o): o for o in objectives},
-                           "eval": {id(o): o for o in objectives + list(extra_eval_objectives)}}
+        self.objectives = {
+            "train": {id(o): o for o in objectives},
+            "eval": {id(o): o for o in objectives + list(extra_eval_objectives)},
+        }
 
         # initially, let the user know the total number of samples that will be used for training and evaluation
         for split in ["train", "eval"]:
@@ -51,7 +65,9 @@ class Schedule(abc.ABC):
 
             logger.warning("Total number of %s samples: %s", split, num_samples)
             if not num_samples:
-                logger.warning("Make sure that you do not want to pass any %s samples!", split)
+                logger.warning(
+                    "Make sure that you do not want to pass any %s samples!", split
+                )
 
         self.objectives_outputs_queue = []
         self.converged_objectives = []
@@ -95,33 +111,62 @@ class Schedule(abc.ABC):
         :return: a tuple of [<if to stop>, <reason why to stop>]
         """
         # a number of epochs per all objectives is an upper-bound of the training duration
-        obj_passed_epochs = [oid for oid in self.objectives["train"].keys() if self._objective_passed_epochs(oid)]
+        obj_passed_epochs = [
+            oid
+            for oid in self.objectives["train"].keys()
+            if self._objective_passed_epochs(oid)
+        ]
         if len(obj_passed_epochs) == len(self.objectives["train"]):
-            logger.warning("Scheduler reached the given maximum number of epochs for all objectives. "
-                           "Triggering termination.")
+            logger.warning(
+                "Scheduler reached the given maximum number of epochs for all objectives. "
+                "Triggering termination."
+            )
             return True, StoppingStrategy.ALL_OBJECTIVES_NUM_EPOCHS
         # if the upper bound does not apply, check for the user-selected stopping strategy
 
         # strategies based on objectives' convergence
-        if self.args.stopping_strategy in (StoppingStrategy.FIRST_OBJECTIVE_CONVERGED,
-                                           StoppingStrategy.ALL_OBJECTIVES_CONVERGED):
-            self.converged_objectives = [obj for obj in self.objectives["train"].values()
-                                         if obj.is_finished(convergence_patience=self.args.stopping_patience)]
-            logger.warning("Converged objectives: %s" % [str(o) for o in self.converged_objectives])
-            if self.args.stopping_strategy == StoppingStrategy.FIRST_OBJECTIVE_CONVERGED:
+        if self.args.stopping_strategy in (
+            StoppingStrategy.FIRST_OBJECTIVE_CONVERGED,
+            StoppingStrategy.ALL_OBJECTIVES_CONVERGED,
+        ):
+            self.converged_objectives = [
+                obj
+                for obj in self.objectives["train"].values()
+                if obj.is_finished(convergence_patience=self.args.stopping_patience)
+            ]
+            logger.warning(
+                "Converged objectives: %s" % [str(o) for o in self.converged_objectives]
+            )
+            if (
+                self.args.stopping_strategy
+                == StoppingStrategy.FIRST_OBJECTIVE_CONVERGED
+            ):
                 return len(self.converged_objectives) > 0, self.args.stopping_strategy
             else:
-                return len(self.converged_objectives) == len(self.objectives["train"]), self.args.stopping_strategy
+                return (
+                    len(self.converged_objectives) == len(self.objectives["train"]),
+                    self.args.stopping_strategy,
+                )
 
         # strategies based on objectives' number of epochs
-        elif self.args.stopping_strategy in (StoppingStrategy.FIRST_OBJECTIVE_NUM_EPOCHS,
-                                             StoppingStrategy.ALL_OBJECTIVES_NUM_EPOCHS):
-            logger.warning("Objectives that passed max_epochs: %s" % [str(self.objectives["train"][o])
-                                                                      for o in obj_passed_epochs])
-            if self.args.stopping_strategy == StoppingStrategy.FIRST_OBJECTIVE_NUM_EPOCHS:
+        elif self.args.stopping_strategy in (
+            StoppingStrategy.FIRST_OBJECTIVE_NUM_EPOCHS,
+            StoppingStrategy.ALL_OBJECTIVES_NUM_EPOCHS,
+        ):
+            logger.warning(
+                "Objectives that passed max_epochs: %s"
+                % [str(self.objectives["train"][o]) for o in obj_passed_epochs]
+            )
+            if (
+                self.args.stopping_strategy
+                == StoppingStrategy.FIRST_OBJECTIVE_NUM_EPOCHS
+            ):
                 return len(obj_passed_epochs) > 0, self.args.stopping_strategy
             else:
-                return len(obj_passed_epochs) == len(self.objectives["train"]), self.args.stopping_strategy
+                return (
+                    len(obj_passed_epochs) == len(self.objectives["train"]),
+                    self.args.stopping_strategy,
+                )
 
         # strategies based on a number of steps
         elif self.args.stopping_strategy == StoppingStrategy.NUM_STEPS_TOTAL:
@@ -130,10 +175,20 @@ class Schedule(abc.ABC):
                 return True, StoppingStrategy.NUM_STEPS_TOTAL
 
         elif self.args.stopping_strategy == StoppingStrategy.ALL_OBJECTIVES_NUM_STEPS:
-            max_steps_objectives = [o for o in self.objectives["train"].values() if o.num_steps >= self.args.max_steps]
-            logger.warning("Objectives that passed max_steps: %s" % [str(o) for o in max_steps_objectives])
+            max_steps_objectives = [
+                o
+                for o in self.objectives["train"].values()
+                if o.num_steps >= self.args.max_steps
+            ]
+            logger.warning(
+                "Objectives that passed max_steps: %s"
+                % [str(o) for o in max_steps_objectives]
+            )
 
-            return len(max_steps_objectives) == len(self.objectives["train"]), StoppingStrategy.ALL_OBJECTIVES_NUM_STEPS
+            return (
+                len(max_steps_objectives) == len(self.objectives["train"]),
+                StoppingStrategy.ALL_OBJECTIVES_NUM_STEPS,
+            )
 
         return False, self.args.stopping_strategy
 
@@ -145,9 +200,14 @@ class Schedule(abc.ABC):
         """
 
         class AdaptationStoppingCallback(TrainerCallback):
-
-            def on_log(cls, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
-                """ Event called by Trainer after the given `logging_steps`."""
+            def on_log(
+                cls,
+                args: TrainingArguments,
+                state: TrainerState,
+                control: TrainerControl,
+                **kwargs
+            ) -> None:
+                """Event called by Trainer after the given `logging_steps`."""
                 self.remember_if_should_stop()
 
         return AdaptationStoppingCallback()
@@ -159,12 +219,16 @@ class Schedule(abc.ABC):
         """
         self.should_stop, stopping_strategy = self._should_stop()
         if self.should_stop:
-            logger.warning("Scheduler reached a termination condition: %s" % stopping_strategy.name)
+            logger.warning(
+                "Scheduler reached a termination condition: %s" % stopping_strategy.name
+            )
 
-    def compute_loss(self,
-                     logit_outputs: torch.FloatTensor,
-                     labels: torch.Tensor,
-                     inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
+    def compute_loss(
+        self,
+        logit_outputs: torch.FloatTensor,
+        labels: torch.Tensor,
+        inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
+    ) -> torch.FloatTensor:
         """
         Retrieves a loss from the corresponding objective.
 
@@ -177,11 +241,15 @@ class Schedule(abc.ABC):
         split, oid = self.objectives_outputs_queue.pop(0)
 
         # the objective loss arrives aggregated into a single item
-        loss = self.objectives[split][oid].compute_loss(logit_outputs, labels, inputs, split)
+        loss = self.objectives[split][oid].compute_loss(
+            logit_outputs, labels, inputs, split
+        )
 
         return loss
 
-    def _one_round_eval_objective_sampler(self, objective: Objective, obj_i: int) -> Iterator[Dict[str, Any]]:
+    def _one_round_eval_objective_sampler(
+        self, objective: Objective, obj_i: int
+    ) -> Iterator[Dict[str, Any]]:
         """
         Default evaluation data sampling strategy: constructs a single-round iterator
         over evaluation dataset of selected objective.
@@ -195,7 +263,9 @@ class Schedule(abc.ABC):
             self.objectives_outputs_queue.append(("eval", sample["oid"]))
             yield sample
 
-    def _infinite_train_objective_sampler(self, objective: Objective, obj_i: int) -> Iterator[Dict[str, Any]]:
+    def _infinite_train_objective_sampler(
+        self, objective: Objective, obj_i: int
+    ) -> Iterator[Dict[str, Any]]:
         """
         Default training data sampling strategy: constructs infinite iterator
         over training dataset of selected objective.
@@ -213,7 +283,9 @@ class Schedule(abc.ABC):
                 self.objectives_outputs_queue.append(("train", sample["oid"]))
                 yield sample
 
-    def _sample_objective_dataset(self, objective: Objective, obj_i: int, split: str) -> Iterator[Dict[str, Any]]:
+    def _sample_objective_dataset(
+        self, objective: Objective, obj_i: int, split: str
+    ) -> Iterator[Dict[str, Any]]:
         if split == "train":
             # infinite iteration of the training resources, until the termination condition apply
             return self._infinite_train_objective_sampler(objective, obj_i)
@@ -233,10 +305,14 @@ class Schedule(abc.ABC):
             objective_sampler = self._sample_objectives(split)
         else:
             # evaluation split uses simple, sequential evaluation over objectives
-            objective_sampler = SequentialSchedule.single_iteration_eval_sampling(self.objectives["eval"].values())
+            objective_sampler = SequentialSchedule.single_iteration_eval_sampling(
+                self.objectives["eval"].values()
+            )
 
-        objectives_data_samplers = {obj: self._sample_objective_dataset(obj, obj_i, split)
-                                    for obj_i, obj in enumerate(self.objectives[split].values())}
+        objectives_data_samplers = {
+            obj: self._sample_objective_dataset(obj, obj_i, split)
+            for obj_i, obj in enumerate(self.objectives[split].values())
+        }
         for i, objective in enumerate(objective_sampler):
             try:
                 yield next(objectives_data_samplers[objective])
@@ -254,11 +330,18 @@ class Schedule(abc.ABC):
         :param split: data split to iterate. `train` or `eval`.
         :return: AdaptationDataset combined according to this Schedule.
         """
-        length_combined = int(sum((o.dataset_length[split] // o.batch_size) for o in self.objectives[split].values()))
+        length_combined = int(
+            sum(
+                (o.dataset_length[split] // o.batch_size)
+                for o in self.objectives[split].values()
+            )
+        )
         if split == "train":
             length_combined *= int(self.args.num_train_epochs)
 
-        return TransformerAdaptationDataset(self._combine_datasets(split), length_combined)
+        return TransformerAdaptationDataset(
+            self._combine_datasets(split), length_combined
+        )
 
 
 class SequentialSchedule(Schedule):
@@ -276,12 +359,17 @@ class SequentialSchedule(Schedule):
         while True:
             for objective in self.objectives[split].values():
                 for _ in range(objective.dataset_length[split]):
-                    if objective in self.converged_objectives and not self.args.log_converged_objectives:
+                    if (
+                        objective in self.converged_objectives
+                        and not self.args.log_converged_objectives
+                    ):
                         continue
                     yield objective
 
     @staticmethod
-    def single_iteration_eval_sampling(objectives: Iterable[Objective]) -> Iterable[Objective]:
+    def single_iteration_eval_sampling(
+        objectives: Iterable[Objective],
+    ) -> Iterable[Objective]:
         """
         Simple finite, single iteration over all objectives. Used by base Schedule for evaluation.
         :param objectives: Objectives to schedule.
@@ -304,6 +392,9 @@ class ParallelSchedule(Schedule):
         """
         while True:
             for objective in self.objectives[split].values():
-                if objective in self.converged_objectives and not self.args.log_converged_objectives:
+                if (
+                    objective in self.converged_objectives
+                    and not self.args.log_converged_objectives
+                ):
                     continue
                 yield objective

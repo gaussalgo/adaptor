@@ -1,10 +1,11 @@
 import logging
+import inspect
 from typing import List, Dict, Any, Optional
 
 import torch
 from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForSequenceClassification, \
     AutoModelForTokenClassification, AutoModelForSeq2SeqLM, AutoModelForCausalLM, \
-    AutoModelForMaskedLM
+    AutoModelForMaskedLM, AutoModelForQuestionAnswering
 
 from .utils import Head
 
@@ -57,6 +58,8 @@ class LangModule(torch.nn.Module):
             new_head = AutoModelForCausalLM.from_pretrained(model_name_or_path, **head_kwargs)
         elif head_type == Head.MLM:
             new_head = AutoModelForMaskedLM.from_pretrained(model_name_or_path, **head_kwargs)
+        elif head_type == Head.QA:
+            new_head = AutoModelForQuestionAnswering.from_pretrained(model_name_or_path, **head_kwargs)
         else:
             new_head = torch.load(model_name_or_path, **head_kwargs)
 
@@ -148,10 +151,13 @@ class LangModule(torch.nn.Module):
         :return: Raw model outputs (logits).
         """
         selected_head_model = self.trainable_models[str(inputs["oid"])]
+        # include only correct inputs for a specific model
+        list_of_model_specific_inputs = inspect.getfullargspec(selected_head_model.forward).args
+        model_specific_inputs = {k: v for k, v in inputs.items() if k in list_of_model_specific_inputs}
 
         # including labels cause the loss to be computed twice - by objective + by HF models forward()
         # but labels are also used to infer decoder_input_ids of some models, so we need to pass it
-        selected_head_output = selected_head_model(**{k: v for k, v in inputs.items() if k not in ("oid",)})
+        selected_head_output = selected_head_model(**model_specific_inputs)
         # HF models produce special Output objects instead of a raw output
         logits = selected_head_output.logits if hasattr(selected_head_output, "logits") else selected_head_output
 
