@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Union, Iterator
+from typing import Dict, Optional, Tuple, Union, Iterator, List
 
 import torch
 from transformers import DataCollatorWithPadding, BatchEncoding
@@ -13,9 +13,21 @@ MAX_LENGTH = 512
 class ExtractiveQA(SupervisedObjective):
     compatible_head: Head = Head.QA
 
+    @staticmethod
+    def _find_start_end_position(sublist: List[int], orig_list: List[int]) -> Tuple[int, int]:
+        """
+        Returns first occurance of sublist in original list.
+        If no occurance is found positions (0,0) are returned.
+        """
+        start_positions_list = [i for i in range(len(orig_list)-len(sublist)) if orig_list[i:i+len(sublist)] == sublist]
+        if start_positions_list == []:
+            return (0, 0)
+        else:
+            return (start_positions_list[0], start_positions_list[0]+len(sublist))
+
     def _get_inputs_iterator(self, split: str) -> Iterator:
         """
-        Batches and encodes input texts and corresponding labels.
+        Batches and encodes input texts, text pairs and corresponding labels.
         :param split: Selected data split. `train` or `eval`.
         :return: Iterator over batch encodings.
         """
@@ -30,14 +42,9 @@ class ExtractiveQA(SupervisedObjective):
                                         padding='max_length')
             tokenized_label = self.tokenizer(label, max_length=MAX_LENGTH, truncation=True, padding='max_length')
             label_wo_padding = self.tokenizer(label)
-            # find indexes for answer:
-            if set(tokenized_label["input_ids"][1:-1]).issubset(set(out_sample["input_ids"])):
-                start_position = out_sample["input_ids"].index(tokenized_label["input_ids"][1:-1][0])
-                answer_length = len(label_wo_padding["input_ids"][1:-1])
-            else:
-                start_position = 0
-                answer_length = 0
-            end_position = start_position + answer_length
+            start_position, end_position = self._find_start_end_position(
+                                                    label_wo_padding["input_ids"][1:-1],
+                                                    out_sample["input_ids"])
             out_sample["label"] = tokenized_label["input_ids"]
             out_sample["start_position"] = start_position
             out_sample["end_position"] = end_position
