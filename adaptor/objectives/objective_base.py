@@ -556,7 +556,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
             yield collator(batch_features)
 
     def _per_split_iterators(self, split: str) -> Union[Tuple[Iterable[str], Iterable[str]],
-                                                  Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
+                                                        Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
         """
         Default inputs iterator for supervised objectives. Returns a pair of iterators, over input texts and labels.
         Not meant to be overriden when implementing custom data set. Instead choose to inherit either
