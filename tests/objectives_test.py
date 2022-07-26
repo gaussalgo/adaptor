@@ -133,6 +133,6 @@ def test_supervised_QA_objective():
                              texts_or_path=paths["texts"]["QA"],
                              text_pair_or_path=paths["text_pair"]["QA"],
                              labels_or_path=paths["labels"]["QA"],
-                             batch_size=4, )
+                             batch_size=4)
 
     assert_module_objective_ok(lang_module, objective)

@@ -519,7 +519,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
         return super().register_compatible_head_model(lang_module, other_objective,
                                                       objective_args_for_head_config, preloaded_module)
 
-    def _get_inputs_iterator(self, split: str) -> Iterator:
+    def _get_inputs_iterator(self, split: str) -> Iterator[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
         """
         Batches and encodes input texts and corresponding labels.
         :param split: Selected data split. `train` or `eval`.
@@ -530,72 +530,33 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
         classifying_pairs = None
 
         batch_features = []
-        if self.text_pair is None and self.text_pair_path is None:
-            for src_text, label in zip(*self._per_split_iterators(split)):
-                # check from the first sample
-                if classifying_pairs is None:
-                    # if the input texts are tab-separated we will tokenize them as pairs
-                    classifying_pairs = "\t" in src_text
+        for source_target_tuple in zip(*self._per_split_iterators(split)):
+            # check from the first sample
+            if classifying_pairs is None:
+                # if the input texts are tab-separated we will tokenize them as pairs
+                classifying_pairs = len(source_target_tuple) > 2
                 if classifying_pairs:
-                    text, text_pair = src_text.split("\t")
-                    out_sample = self.tokenizer(text, text_pair=text_pair, truncation=True)
-                else:
-                    out_sample = self.tokenizer(src_text, truncation=True)
-                out_sample["label"] = torch.tensor(self.labels_map[label])
-                batch_features.append(out_sample)
-                if len(batch_features) == self.batch_size:
-                    yield collator(batch_features)
-                    batch_features = []
+                    assert len(source_target_tuple) == 3, "Expecting tuples of (source, source_pair, target) texts"
+            if classifying_pairs:
+                text, text_pair, label = source_target_tuple
+                out_sample = self.tokenizer(text, text_pair=text_pair, truncation=True)
+            else:
+                text, label = source_target_tuple
+                out_sample = self.tokenizer(text, truncation=True)
 
-        else:
-            for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
-                # check from the first sample
-                out_sample = self.tokenizer(src_text, text_pair=text_pair, truncation=True)
-                out_sample["label"] = torch.tensor(self.labels_map[label])
-                batch_features.append(out_sample)
-                if len(batch_features) == self.batch_size:
-                    yield collator(batch_features)
-                    batch_features = []
+            out_sample["label"] = torch.tensor(self.labels_map[label])
+
+            batch_features.append(out_sample)
+            if len(batch_features) == self.batch_size:
+                yield collator(batch_features)
+                batch_features = []
 
         if batch_features:
             # yield residual batch
             yield collator(batch_features)
 
-    def _per_split_iterators_text_pair(self, split: str) -> Tuple[Iterable[str], Iterable[str], Iterable[str]]:
-        """
-        Inputs iterator for supervised objectives in case text pairs are present.
-        Returns tuple of iterators, over input texts, text pairs and labels.
-        :param split: Data split to iterate over
-        :return: a tuple of identical [inputs_iterator, text_pairs_iterator, labels_iterator]
-        """
-
-        sources_iter, _ = super(SupervisedObjective, self)._per_split_iterators(split)
-
-        if split == "train":
-            if self.texts is not None:
-                targets_iter = iter(self.labels)
-                text_pairs_iter = iter(self.text_pair)
-            else:
-                targets_iter = AdaptationDataset.iter_text_file_per_line(self.labels_path)
-                text_pairs_iter = AdaptationDataset.iter_text_file_per_line(self.text_pair_path)
-        elif split == "eval":
-
-            if self.val_labels is not None:
-                targets_iter = iter(self.val_labels)
-                text_pairs_iter = iter(self.val_text_pair)
-            elif self.val_labels_path is not None:
-                targets_iter = AdaptationDataset.iter_text_file_per_line(self.val_labels_path)
-                text_pairs_iter = AdaptationDataset.iter_text_file_per_line(self.val_text_pair_path)
-            else:
-                raise ValueError("Objective %s did not get any validation labels :( "
-                                 "Hint: pass `AdaptationArgs(do_eval=False)` to avoid evaluation, "
-                                 "or set Objective(val_labels) param." % self)
-        else:
-            raise ValueError("Unrecognized split: %s" % split)
-
-        return sources_iter, text_pairs_iter, targets_iter
-
-    def _per_split_iterators(self, split: str) -> Tuple[Iterable[str], Iterable[str]]:
+    def _per_split_iterators(self, split: str) -> Union[Tuple[Iterable[str], Iterable[str]],
+                                                  Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
         """
         Default inputs iterator for supervised objectives. Returns a pair of iterators, over input texts and labels.
         Not meant to be overriden when implementing custom data set. Instead choose to inherit either
@@ -609,8 +570,14 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                 targets_iter = iter(self.labels)
             else:
                 targets_iter = AdaptationDataset.iter_text_file_per_line(self.labels_path)
-        elif split == "eval":
+            if self.text_pair is not None:
+                source_pairs_iter = iter(self.text_pair)
+            elif self.text_pair_path is not None:
+                source_pairs_iter = AdaptationDataset.iter_text_file_per_line(self.text_pair_path)
+            else:
+                source_pairs_iter = None
 
+        elif split == "eval":
             if self.val_labels is not None:
                 targets_iter = iter(self.val_labels)
             elif self.val_labels_path is not None:
@@ -619,7 +586,16 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
                 raise ValueError("Objective %s did not get any validation labels :( "
                                  "Hint: pass `AdaptationArgs(do_eval=False)` to avoid evaluation, "
                                  "or set Objective(val_labels) param." % self)
+
+            if self.val_text_pair is not None:
+                source_pairs_iter = iter(self.val_text_pair)
+            elif self.val_text_pair_path is not None:
+                source_pairs_iter = AdaptationDataset.iter_text_file_per_line(self.val_text_pair_path)
+            else:
+                source_pairs_iter = None
         else:
             raise ValueError("Unrecognized split: %s" % split)
-
-        return sources_iter, targets_iter
+        if source_pairs_iter is not None:
+            return sources_iter, source_pairs_iter, targets_iter
+        else:
+            return sources_iter, targets_iter

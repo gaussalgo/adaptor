@@ -7,6 +7,7 @@ from transformers.modeling_outputs import QuestionAnsweringModelOutput
 from ..objectives.objective_base import SupervisedObjective
 from ..utils import Head
 
+# TODO: replace occurrences with tokenizer attribute
 MAX_LENGTH = 512
 
 
@@ -32,19 +33,17 @@ class ExtractiveQA(SupervisedObjective):
         :return: Iterator over batch encodings.
         """
 
-        collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8, return_tensors="pt",
-                                           max_length=MAX_LENGTH, padding='max_length')
+        collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8,
+                                           return_tensors="pt", padding='max_length')
 
         batch_features = []
 
-        for src_text, text_pair, label in zip(*self._per_split_iterators_text_pair(split)):
-            out_sample = self.tokenizer(src_text, text_pair=text_pair, max_length=MAX_LENGTH, truncation=True,
-                                        padding='max_length')
-            tokenized_label = self.tokenizer(label, max_length=MAX_LENGTH, truncation=True, padding='max_length')
+        for src_text, text_pair, label in zip(*self._per_split_iterators(split)):
+            out_sample = self.tokenizer(src_text, text_pair=text_pair, truncation=True, padding='max_length')
+            tokenized_label = self.tokenizer(label, truncation=True, padding='max_length')
             label_wo_padding = self.tokenizer(label)
-            start_position, end_position = self._find_start_end_position(
-                                                    label_wo_padding["input_ids"][1:-1],
-                                                    out_sample["input_ids"])
+            start_position, end_position = self._find_start_end_position(label_wo_padding["input_ids"][1:-1],
+                                                                         out_sample["input_ids"])
             out_sample["label"] = tokenized_label["input_ids"]
             out_sample["start_position"] = start_position
             out_sample["end_position"] = end_position
