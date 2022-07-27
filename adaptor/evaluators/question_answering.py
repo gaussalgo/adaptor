@@ -46,4 +46,4 @@ class BLEUForQA(EvaluatorBase):
 
     @staticmethod
     def evaluate_str(expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
-        return corpus_bleu(actual_list, [list(expected_list)]).score
+        return corpus_bleu(actual_list, [[e] for e in expected_list]).score
