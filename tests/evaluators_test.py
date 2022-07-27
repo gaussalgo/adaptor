@@ -1,4 +1,5 @@
 from adaptor.evaluators.generative import GenerativeEvaluator
+from adaptor.evaluators.question_answering import ExtractiveQAEvaluator
 from adaptor.evaluators.sequence_classification import SeqClassificationEvaluator
 from adaptor.evaluators.token_classification import TokenClassificationEvaluator
 from adaptor.lang_module import LangModule
@@ -84,6 +85,21 @@ def assert_classification_evaluator_logs(evaluator: SeqClassificationEvaluator, 
     assert_evaluator_logs(lang_module, gen_objective, split)
 
 
+def assert_qa_evaluator_logs(evaluator: ExtractiveQAEvaluator, split: str) -> None:
+    from adaptor.objectives.question_answering import ExtractiveQA
+    lang_module = LangModule(test_base_models["extractive_QA"])
+
+    qa_objective = ExtractiveQA(lang_module,
+                                texts_or_path=paths["texts"]["QA"],
+                                text_pair_or_path=paths["text_pair"]["QA"],
+                                labels_or_path=paths["labels"]["QA"],
+                                batch_size=2,
+                                train_evaluators=[evaluator],
+                                val_evaluators=[evaluator])
+
+    assert_evaluator_logs(lang_module, qa_objective, split)
+
+
 def test_bleu():
     from adaptor.evaluators.generative import BLEU
     assert_gen_evaluator_logs(BLEU(use_generate=True, decides_convergence=True), "train")
@@ -133,3 +149,18 @@ def test_token_fscore():
 def test_sequence_accuracy():
     from adaptor.evaluators.sequence_classification import SequenceAccuracy
     assert_classification_evaluator_logs(SequenceAccuracy(decides_convergence=False), "train")
+
+
+def test_QA_exact_match():
+    from adaptor.evaluators.question_answering import ExactMatch
+    assert_qa_evaluator_logs(ExactMatch(), "train")
+
+
+def test_QA_fscore():
+    from adaptor.evaluators.question_answering import F1ScoreForQA
+    assert_qa_evaluator_logs(F1ScoreForQA(), "train")
+
+
+def test_QA_BLEU():
+    from adaptor.evaluators.question_answering import BLEUForQA
+    assert_qa_evaluator_logs(BLEUForQA(), "train")
