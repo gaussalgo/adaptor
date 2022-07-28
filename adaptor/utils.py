@@ -13,7 +13,8 @@ class Head(Enum):
     SEQ2SEQ = 4
     CLM = 5
     MLM = 6
-    UNKNOWN = 7
+    QA = 7
+    UNKNOWN = 8
 
 
 class StoppingStrategy(Enum):
@@ -48,8 +49,11 @@ class AdaptationDataset(IterableDataset, abc.ABC):
 
 
 class TransformerAdaptationDataset(AdaptationDataset):
-
-    def __init__(self, batch_encoding_params: Iterable[Dict[str, torch.LongTensor]], length: Optional[int] = None):
+    def __init__(
+        self,
+        batch_encoding_params: Iterable[Dict[str, torch.LongTensor]],
+        length: Optional[int] = None,
+    ):
         """
         :param batch_encoding_params: Arguments to be passed to BatchEncoding (input_ids, attention_mask, labels)
         """
@@ -77,22 +81,24 @@ class TransformerAdaptationDataset(AdaptationDataset):
 class AdaptationArguments(TrainingArguments):
 
     fixed_adaptation_args = {
-            "per_device_train_batch_size": 1,  # batching is done by Objective, no two distinct batches
-            "per_device_eval_batch_size": 1,  # should be present in a single infer batch
-            "per_gpu_train_batch_size": None,  # aggregation over multiple objectives can be done using
-            "per_gpu_eval_batch_size": None,  # `gradient_accumulation_steps` > 1
-            "do_predict": False,  # we do not want to mangle with multi-objective reports here,
-                                  # models are separately reloadable
-            "disable_tqdm": True,  # scheduler takes care of top-level terminal monitoring
-            "dataloader_pin_memory": False,  # does not necessarily match the shapes in multi-objective training
-            "remove_unused_columns": False,  # from transformers 4.19.x, this would remove batches' control attributes
+        "per_device_train_batch_size": 1,  # batching is done by Objective, no two distinct batches
+        "per_device_eval_batch_size": 1,  # should be present in a single infer batch
+        "per_gpu_train_batch_size": None,  # aggregation over multiple objectives can be done using
+        "per_gpu_eval_batch_size": None,  # `gradient_accumulation_steps` > 1
+        "do_predict": False,  # we do not want to mangle with multi-objective reports here,
+        # models are separately reloadable
+        "disable_tqdm": True,  # scheduler takes care of top-level terminal monitoring
+        "dataloader_pin_memory": False,  # does not necessarily match the shapes in multi-objective training
+        "remove_unused_columns": False,  # from transformers 4.19.x, this would remove batches' control attributes
     }
 
-    def __init__(self,
-                 stopping_strategy: StoppingStrategy,
-                 stopping_patience: Optional[int] = 10,
-                 also_log_converged_objectives: Optional[bool] = True,
-                 **kwargs):
+    def __init__(
+        self,
+        stopping_strategy: StoppingStrategy,
+        stopping_patience: Optional[int] = 10,
+        also_log_converged_objectives: Optional[bool] = True,
+        **kwargs
+    ):
 
         # novel arguments, w.r.t. original TrainingArguments
         self.stopping_strategy = stopping_strategy
@@ -100,9 +106,14 @@ class AdaptationArguments(TrainingArguments):
         self.log_converged_objectives = also_log_converged_objectives
 
         # adjustments of the defaults expected by Scheduler
-        unexpected_adjusted_args = [arg for arg in kwargs.keys() if arg in self.fixed_adaptation_args.keys()]
+        unexpected_adjusted_args = [
+            arg for arg in kwargs.keys() if arg in self.fixed_adaptation_args.keys()
+        ]
         if unexpected_adjusted_args:
-            raise ValueError("You should not set these TrainingArgs for Adaptation: %s" % unexpected_adjusted_args)
+            raise ValueError(
+                "You should not set these TrainingArgs for Adaptation: %s"
+                % unexpected_adjusted_args
+            )
 
         # set default values to fixed args
         kwargs = {**kwargs, **self.fixed_adaptation_args}
