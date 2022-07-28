@@ -30,8 +30,9 @@ class ExtractiveQAEvaluator(EvaluatorBase, abc.ABC):
 
         for batch in dataset:
             with torch.no_grad():
-                actual_start_pos = model(batch["input_ids"]).start_logits.argmax(-1)
-                actual_end_pos = model(batch["input_ids"]).end_logits.argmax(-1)
+                model_outputs = model(**{k: v for k, v in batch.items() if k in ["oid", "labels"]})
+                actual_start_pos = model_outputs.start_logits.argmax(-1)
+                actual_end_pos = model_outputs.end_logits.argmax(-1)
 
             expected_str.extend(tokenizer.batch_decode(batch["labels"]))
 

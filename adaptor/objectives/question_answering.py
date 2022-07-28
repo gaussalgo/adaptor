@@ -7,24 +7,23 @@ from transformers.modeling_outputs import QuestionAnsweringModelOutput
 from ..objectives.objective_base import SupervisedObjective
 from ..utils import Head
 
-# TODO: replace occurrences with tokenizer attribute
-MAX_LENGTH = 512
-
 
 class ExtractiveQA(SupervisedObjective):
     compatible_head: Head = Head.QA
 
     @staticmethod
-    def _find_start_end_position(sublist: List[int], orig_list: List[int]) -> Tuple[int, int]:
+    def _find_start_end_position(answer_ids: List[int], context_ids: List[int]) -> Tuple[int, int]:
         """
-        Returns first occurance of sublist in original list.
-        If no occurance is found positions (0,0) are returned.
+        Returns first occurrence of subsequence (answer_ids) in the sequence (context_ids).
+        If no match is found, (0, 0) is returned.
         """
-        start_positions_list = [i for i in range(len(orig_list)-len(sublist)) if orig_list[i:i+len(sublist)] == sublist]
-        if start_positions_list == []:
-            return (0, 0)
+        start_positions = [i for i in range(len(context_ids) - len(answer_ids))
+                           if context_ids[i: i + len(answer_ids)] == answer_ids]
+        if not start_positions:
+            return 0, 0
         else:
-            return (start_positions_list[0], start_positions_list[0]+len(sublist))
+            first_start_position, first_end_position = start_positions[0], start_positions[0] + len(answer_ids)
+            return first_start_position, first_end_position
 
     def _get_inputs_iterator(self, split: str) -> Iterator:
         """
