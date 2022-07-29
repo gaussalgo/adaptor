@@ -4,7 +4,6 @@ import itertools
 from adaptor.evaluators.evaluator_base import EvaluatorBase
 from adaptor.utils import Head, AdaptationDataset
 from typing import List, Sequence
-from sacrebleu import corpus_bleu
 import torch
 from transformers import PreTrainedTokenizer
 
@@ -103,4 +102,5 @@ class BLEUForQA(ExtractiveQAEvaluator):
     smaller_is_better: bool = False
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
+        from sacrebleu import corpus_bleu
         return corpus_bleu(actual_list, [[e] for e in expected_list]).score
