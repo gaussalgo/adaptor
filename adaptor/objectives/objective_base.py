@@ -188,11 +188,6 @@ class Objective(abc.ABC):
         else:
             stopping_evaluator = "loss"
 
-        # ambiguous & buggy?
-        # the objective was not active in the recent progress_bar interval -> it should not be marked converged
-        # if not any(self.evaluations_history["train"][e] for e in self.evaluators['train']):
-        #     return False
-
         passed_patience_evals = len(self.evaluations_history["eval"][stopping_evaluator]) > patience
         if not passed_patience_evals:
             # less than `patience` evaluations has passed so far
