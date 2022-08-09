@@ -19,12 +19,21 @@ class TokenClassification(SupervisedObjective):
         """
         Decompose given space-separated labels and words into subword-aligned input ids and label ids,
         Performs batching and collation and return resulting encodings.
-        :param texts: Sentence-level input texts.
-        :param labels: Sentence-level input labels, aligned with input words by spaces.
+
+        NOTE: be aware that due to the segmentation by spaces, tokenization might differ between the training
+        and inference for the models using space-including tokenizers, such as sentencepiece.
+        We tested this objective only with commonly-used Encoders (BERT, RoBERTa) utilizing pre-tokenized WPiece & BPE.
+
         For an example of expected inputs, see tests/mock_data/supervised_texts.txt
         and texts/mock_data/supervised_texts_token_labels.txt
 
-        :return: Aligned encodings.
+        :param texts: Sentence-level input texts.
+        :param labels: Sentence-level input labels, aligned with input words by spaces.
+        :param label_all_tokens: Whether to assign consistent label to all wordpieces of labeled tokens,
+        or only to the first wordpiece, giving `ignore_label_idx` to the following wordpieces.
+        :param ignore_label_idx: a label assigned to the wordpieces assigned no labels.
+
+        :return: Aligned, batched encodings.
         """
         collator = DataCollatorForTokenClassification(self.tokenizer, pad_to_multiple_of=8)
         batch_features = []
