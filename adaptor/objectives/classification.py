@@ -66,7 +66,7 @@ class TokenClassification(SupervisedObjective):
                 "A number of tokens in the first line is different than a number of labels. " \
                 "Text: %s \nLabels: %s" % (text, text_labels)
 
-            tokens_ids = self.tokenizer(tokens, add_special_tokens=False).input_ids
+            tokens_ids = self.tokenizer(tokens, truncation=True, add_special_tokens=False).input_ids
 
             wpiece_ids = special_bos_tokens.copy()
 
