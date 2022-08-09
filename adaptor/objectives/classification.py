@@ -11,8 +11,11 @@ class TokenClassification(SupervisedObjective):
 
     compatible_head = Head.TOKEN_CLASSIFICATION
 
-    def _wordpiece_token_label_alignment(self, texts: Iterable[str],
-                                         labels: Iterable[str]) -> Iterable[Dict[str, torch.LongTensor]]:
+    def _wordpiece_token_label_alignment(self,
+                                         texts: Iterable[str],
+                                         labels: Iterable[str],
+                                         label_all_tokens: bool = True,
+                                         ignore_label_idx: int = -100) -> Iterable[Dict[str, torch.LongTensor]]:
         """
         Decompose given space-separated labels and words into subword-aligned input ids and label ids,
         Performs batching and collation and return resulting encodings.
@@ -26,37 +29,60 @@ class TokenClassification(SupervisedObjective):
         collator = DataCollatorForTokenClassification(self.tokenizer, pad_to_multiple_of=8)
         batch_features = []
 
+        # special tokens identification: general heuristic
+        ids1 = self.tokenizer("X").input_ids
+        ids2 = self.tokenizer("Y").input_ids
+
+        special_bos_tokens = []
+        for i in range(len(ids1)):
+            if ids1[i] == ids2[i]:
+                special_bos_tokens.append(ids1[i])
+            else:
+                break
+
+        special_eos_tokens = []
+        for i in range(1, len(ids1)):
+            if ids1[-i] == ids2[-i]:
+                special_eos_tokens.append(ids1[-i])
+            else:
+                break
+        special_eos_tokens = list(reversed(special_eos_tokens))
+
+        # per-sample iteration
         for text, text_labels in zip(texts, labels):
             tokens = text.split()
             labels = text_labels.split()
-
-            tokenizer_encodings = self.tokenizer(text, truncation=True)
-            # attention mask is lang_module-specific
-            attention_mask = tokenizer_encodings.attention_mask
-            wpiece_ids = tokenizer_encodings.input_ids
-            wordpieces = self.tokenizer.batch_decode(wpiece_ids)
-
-            out_label_ids = []
-
-            # next token lookup - avoid out-of-index, and exclude from token labels
-            tokens.append(wordpieces[-1])
-            labels.append("O")
 
             assert len(tokens) == len(labels), \
                 "A number of tokens in the first line is different than a number of labels. " \
                 "Text: %s \nLabels: %s" % (text, text_labels)
 
-            # assign current label to current wordpiece until the current_token is fully iterated-over
-            current_token, current_label = tokens.pop(0), labels.pop(0)  # noqa F401: current_token unused
-            for wpiece_id, wpiece in zip(wpiece_ids, wordpieces):
-                next_token = tokens[0]
-                if next_token.startswith(wpiece):
-                    # if the next token starts with a current wordpiece, move to the next token + label
-                    current_token, current_label = tokens.pop(0), labels.pop(0)  # noqa F401: current_token unused
-                out_label_ids.append(self.labels_map[current_label])
+            tokens_ids = self.tokenizer(tokens, add_special_tokens=False).input_ids
+
+            wpiece_ids = special_bos_tokens.copy()
+
+            # labels of BoS and EoS are always "other"
+            out_label_ids = [ignore_label_idx] * len(special_bos_tokens)
+
+            for token_ids, label in zip(tokens_ids, labels):
+                # chain the wordpieces without the special symbols for each token
+                wpiece_ids.extend(token_ids)
+                if label_all_tokens:
+                    # label all wordpieces
+                    out_label_ids.extend([self.labels_map[label]] * len(token_ids))
+                else:
+                    # label only the first wordpiece
+                    out_label_ids.append(self.labels_map[label])
+                    # ignore the predictions over other token's wordpieces from the loss
+                    out_label_ids.extend([ignore_label_idx] * (len(token_ids) - 1))
+
+            out_label_ids.extend([ignore_label_idx] * len(special_eos_tokens))
+            wpiece_ids.extend(special_eos_tokens.copy())
+
+            assert len(out_label_ids) == len(wpiece_ids), "We found misaligned labels in sample: '%s'" % text
 
             batch_features.append({"input_ids": wpiece_ids,
-                                   "attention_mask": attention_mask,
+                                   "attention_mask": [1] * len(wpiece_ids),
                                    "labels": out_label_ids})
             # maybe yield a batch
             if len(batch_features) == self.batch_size:
