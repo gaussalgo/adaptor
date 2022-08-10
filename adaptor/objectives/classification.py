@@ -66,7 +66,7 @@ class TokenClassification(SupervisedObjective):
                 "A number of tokens in the first line is different than a number of labels. " \
                 "Text: %s \nLabels: %s" % (text, text_labels)
 
-            tokens_ids = self.tokenizer(tokens, add_special_tokens=False).input_ids
+            tokens_ids = self.tokenizer(tokens, truncation=True, add_special_tokens=False).input_ids
 
             wpiece_ids = special_bos_tokens.copy()
 
@@ -90,9 +90,14 @@ class TokenClassification(SupervisedObjective):
 
             assert len(out_label_ids) == len(wpiece_ids), "We found misaligned labels in sample: '%s'" % text
 
-            batch_features.append({"input_ids": wpiece_ids,
-                                   "attention_mask": [1] * len(wpiece_ids),
-                                   "labels": out_label_ids})
+            if self.tokenizer.model_max_length is None:
+                truncated_size = len(out_label_ids)
+            else:
+                truncated_size = min(self.tokenizer.model_max_length, len(out_label_ids))
+
+            batch_features.append({"input_ids": wpiece_ids[:truncated_size],
+                                   "attention_mask": [1] * truncated_size,
+                                   "labels": out_label_ids[:truncated_size]})
             # maybe yield a batch
             if len(batch_features) == self.batch_size:
                 yield collator(batch_features)
