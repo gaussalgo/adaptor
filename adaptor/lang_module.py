@@ -150,7 +150,12 @@ class LangModule(torch.nn.Module):
         :param inputs: given head input arguments with corresponding values.
         :return: Raw model outputs (logits).
         """
-        selected_head_model = self.trainable_models[str(inputs["oid"])]
+        try:
+            selected_head_model = self.trainable_models[str(inputs["oid"])]
+        except KeyError:
+            raise ValueError("Requesting inference with the objective having no registered head."
+                             "If you are using `extra_eval_objectives`, "
+                             "do not forget to fill in their `share_other_objective_head`.")
         # include only correct inputs for a specific model
         list_of_model_specific_inputs = inspect.getfullargspec(selected_head_model.forward).args
         model_specific_inputs = {k: v for k, v in inputs.items() if k in list_of_model_specific_inputs}

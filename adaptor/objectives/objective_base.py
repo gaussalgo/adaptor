@@ -360,7 +360,8 @@ class Objective(abc.ABC):
         """
         pass
 
-    def register_compatible_head_model(self, lang_module: LangModule,
+    def register_compatible_head_model(self,
+                                       lang_module: LangModule,
                                        other_objective: Optional["Objective"] = None,
                                        objective_args_for_head_config: Optional[Dict[str, Any]] = None,
                                        preloaded_module: Optional[torch.nn.Module] = None) -> torch.nn.Module:
