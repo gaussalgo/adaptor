@@ -9,10 +9,6 @@ from adaptor.objectives.question_answering import ExtractiveQA
 from adaptor.objectives.seq2seq import Sequence2Sequence
 from utils import paths, test_base_models
 
-unsup_target_domain_texts = "mock_data/domain_unsup.txt"
-sup_target_domain_texts = "mock_data/supervised_texts.txt"
-sup_target_domain_labels = "mock_data/supervised_texts_token_labels.txt"
-
 
 def assert_module_objective_ok(lang_module: LangModule, objective: Objective, split: str = "train"):
     # dataset iteration test
