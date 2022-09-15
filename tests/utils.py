@@ -22,12 +22,15 @@ paths = {
 test_base_models = {
     "translation_mono": "Helsinki-NLP/opus-mt-en-cs",
     "translation_multi": {
-            "model": "sshleifer/tiny-mbart",
-            "test_src_lang": "en_XX",
-            "test_tgt_lang": "cs_CZ"},
-    "token_classification": "bert-base-multilingual-cased",
-    "sequence_classification": "bert-base-multilingual-cased",
-    "extractive_QA": "Unbabel/xlm-roberta-comet-small"
+        "model": "sshleifer/tiny-mbart",
+        "test_src_lang": "en_XX",
+        "test_tgt_lang": "cs_CZ"
+    },
+    "token_classification": "bert-base-cased",
+    "sequence_classification": "bert-base-cased",
+    "extractive_QA": "Unbabel/xlm-roberta-comet-small",
+    "MLM": "bert-base-cased",
+    "MLM_student": "distilbert-base-cased"
 }
 
 training_arguments = AdaptationArguments(output_dir="adaptation_output_dir",
