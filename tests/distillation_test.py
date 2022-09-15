@@ -31,7 +31,7 @@ def test_distillation_seq():
     distilled_model = AutoModelForSeq2SeqLM.from_pretrained(test_base_models["translation_mono"])
 
     objective = DistilledSeq2Seq(lang_module,
-                                 distilled_model=distilled_model,
+                                 teacher_model=distilled_model,
                                  texts_or_path=paths["texts"]["translation"],
                                  labels_or_path=paths["labels"]["translation"],
                                  batch_size=4)
@@ -50,7 +50,7 @@ def test_distillation_mlm():
     distilled_model = AutoModelForMaskedLM.from_pretrained(test_base_models["MLM"])
 
     objective = DistilledMLM(lang_module,
-                             distilled_model=distilled_model,
+                             teacher_model=distilled_model,
                              texts_or_path=paths["texts"]["unsup"],
                              batch_size=4)
 
@@ -68,7 +68,7 @@ def test_distillation_mlm_incl_hidden_states():
     distilled_model = AutoModelForMaskedLM.from_pretrained(test_base_models["MLM"])
 
     objective = DistilledMLM(lang_module,
-                             distilled_model=distilled_model,
+                             teacher_model=distilled_model,
                              add_hidden_states_loss=True,
                              texts_or_path=paths["texts"]["unsup"],
                              batch_size=4)
@@ -87,7 +87,7 @@ def test_distillation_mlm_restrict_to_attention():
     distilled_model = AutoModelForMaskedLM.from_pretrained(test_base_models["MLM"])
 
     objective = DistilledMLM(lang_module,
-                             distilled_model=distilled_model,
+                             teacher_model=distilled_model,
                              add_hidden_states_loss=True,
                              restrict_loss_to_mask=True,
                              texts_or_path=paths["texts"]["unsup"],
