@@ -1,4 +1,5 @@
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, AutoModelForTokenClassification
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, AutoModelForTokenClassification, \
+    AutoModelForSequenceClassification
 
 from adaptor.adapter import Adapter
 from adaptor.evaluators.generative import BLEU
@@ -6,7 +7,7 @@ from adaptor.evaluators.token_classification import MeanFScore, AverageAccuracy
 from adaptor.lang_module import LangModule
 from adaptor.objectives.MLM import MaskedLanguageModeling
 from adaptor.objectives.backtranslation import BackTranslation, BackTranslator
-from adaptor.objectives.classification import TokenClassification
+from adaptor.objectives.classification import SequenceClassification, TokenClassification
 from adaptor.objectives.seq2seq import Sequence2Sequence
 from adaptor.schedules import ParallelSchedule, SequentialSchedule
 from utils import training_arguments, paths, test_base_models
@@ -111,3 +112,37 @@ def test_evaluation_ner():
     evaluation = eval_ner_objective.per_objective_log("eval")
     for evaluator in evaluators:
         assert "eval_%s_%s" % (eval_ner_objective, evaluator) in evaluation
+
+
+def test_adaptation_classification():
+
+    lang_module = LangModule(test_base_models["sequence_classification"])
+
+    mlm = MaskedLanguageModeling(lang_module=lang_module,
+                                 texts_or_path=paths["texts"]["unsup"],
+                                 batch_size=1)
+
+    classification = SequenceClassification(lang_module=lang_module,
+                                            texts_or_path=paths["texts"]["classification"],
+                                            labels_or_path=paths["labels"]["classification"],
+                                            batch_size=1)
+
+    parallel_schedule = ParallelSchedule(objectives=[mlm, classification],
+                                         args=training_arguments)
+    # 4. train using Adapter
+    adapter = Adapter(lang_module=lang_module,
+                      schedule=parallel_schedule,
+                      args=training_arguments)
+    adapter.train()
+
+    # 5. save the trained (multi-headed) lang_module
+    adapter.save_model("output_models")
+
+    # 6. reload and use it like any other Hugging Face model
+    classifier = AutoModelForSequenceClassification.from_pretrained("output_models/SequenceClassification")
+    tokenizer = AutoTokenizer.from_pretrained("output_models/SequenceClassification")
+
+    inputs = tokenizer("A piece of text to translate.", return_tensors="pt")
+    output = classifier(**inputs)
+    output_label_id = output.logits.argmax(-1)[0].item()
+    print("Prediction: %s" % classifier.config.id2label[output_label_id])

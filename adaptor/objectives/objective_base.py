@@ -48,6 +48,7 @@ class Objective(abc.ABC):
                  val_evaluators: Sequence[EvaluatorBase] = (),
                  share_other_objective_head: Optional["Objective"] = None,
                  objective_module: Optional[torch.nn.Module] = None,
+                 objective_args_for_head_config: Dict[str, Any] = {},
                  objective_id: Optional[str] = "",
                  loss_weight: Optional[float] = 1,
                  max_samples_per_log: int = 1000,
@@ -67,6 +68,7 @@ class Objective(abc.ABC):
         :param val_evaluators: Evaluators to be called on every evaluation step on validation outputs.
         :param share_other_objective_head: If given, this objective will share module with other given objective.
         :param objective_module: If given, this module will be registered for this objective.
+        :param objective_args_for_head_config: Extra arguments that can be passed to .from_pretrained() on head init.
         :param objective_id: Identifier of this objective, used in logging and checkpoints persistence.
         Necessary, if you train with multiple objectives of the same type, otherwise they might override each other.
         :param loss_weight: A scalar of the loss of this objective in multi-objective training.
@@ -88,7 +90,7 @@ class Objective(abc.ABC):
 
         self.compatible_head_model = self.register_compatible_head_model(lang_module,
                                                                          share_other_objective_head,
-                                                                         {},
+                                                                         objective_args_for_head_config,
                                                                          objective_module)
         self.epoch = 0
         self.dataset_length = {"train": 0, "eval": 0}
