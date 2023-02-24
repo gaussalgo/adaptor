@@ -375,7 +375,7 @@ class Objective(abc.ABC):
         return sources_iter
 
     @abc.abstractmethod
-    def _per_split_iterators(self, split: str) -> Union[Tuple[Iterable[str],],
+    def _per_split_iterators(self, split: str) -> Union[Tuple[Iterable[str], ],
                                                         Tuple[Iterable[str], Iterable[str]],
                                                         Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
         """
@@ -565,7 +565,7 @@ class SupervisedObjective(Objective, abc.ABC):
         :param split: Data split to iterate over
         :return: a pair of identical [inputs_iterator, labels_iterator]
         """
-        sources_iter, *_ = super(SupervisedObjective, self)._per_split_iterators(split)
+        sources_iter, _ = super(SupervisedObjective, self)._per_split_iterators(split)  # type: ignore
 
         if split == "train":
             if self.texts is not None:
