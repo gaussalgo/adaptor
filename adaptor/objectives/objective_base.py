@@ -565,7 +565,7 @@ class SupervisedObjective(Objective, abc.ABC):
         :param split: Data split to iterate over
         :return: a pair of identical [inputs_iterator, labels_iterator]
         """
-        sources_iter, _ = super(SupervisedObjective, self)._per_split_iterators(split)  # type: ignore
+        sources_iter = self._per_split_iterator_sources(split)
 
         if split == "train":
             if self.texts is not None:
