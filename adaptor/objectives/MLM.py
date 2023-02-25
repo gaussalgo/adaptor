@@ -60,7 +60,7 @@ class MaskedLanguageModeling(UnsupervisedObjective):
         :param split: Data split. `train` or `eval`.
         :return:
         """
-        texts_iter = self._per_split_iterator_single(split)
+        texts_iter = self._per_split_iterator_sources(split)
         collated_iter = self._mask_some_tokens(texts_iter)
         return collated_iter
 

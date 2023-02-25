@@ -4,7 +4,7 @@ import logging
 from typing import List, Union, Optional, Iterable, Tuple, Dict, Sequence, Any, Iterator
 
 import torch
-from tqdm import trange
+from tqdm import trange, tqdm
 from transformers import BatchEncoding, DataCollatorWithPadding
 
 from ..evaluators.evaluator_base import EvaluatorBase
@@ -34,7 +34,7 @@ class Objective(abc.ABC):
     dataset_length: Dict[str, int]
     loss_history: Dict[str, List[float]]
     evaluations_history: Dict[str, Dict[Union[str, EvaluatorBase], List[float]]]
-    progressbar: Dict[str, trange]
+    progressbar: Dict[str, tqdm]
     evaluators: Dict[str, List[EvaluatorBase]]
 
     num_samples_per_log: Dict[str, int]
@@ -48,6 +48,7 @@ class Objective(abc.ABC):
                  val_evaluators: Sequence[EvaluatorBase] = (),
                  share_other_objective_head: Optional["Objective"] = None,
                  objective_module: Optional[torch.nn.Module] = None,
+                 objective_args_for_head_config: Dict[str, Any] = {},
                  objective_id: Optional[str] = "",
                  loss_weight: Optional[float] = 1,
                  max_samples_per_log: int = 1000,
@@ -67,6 +68,7 @@ class Objective(abc.ABC):
         :param val_evaluators: Evaluators to be called on every evaluation step on validation outputs.
         :param share_other_objective_head: If given, this objective will share module with other given objective.
         :param objective_module: If given, this module will be registered for this objective.
+        :param objective_args_for_head_config: Extra arguments that can be passed to .from_pretrained() on head init.
         :param objective_id: Identifier of this objective, used in logging and checkpoints persistence.
         Necessary, if you train with multiple objectives of the same type, otherwise they might override each other.
         :param loss_weight: A scalar of the loss of this objective in multi-objective training.
@@ -88,7 +90,7 @@ class Objective(abc.ABC):
 
         self.compatible_head_model = self.register_compatible_head_model(lang_module,
                                                                          share_other_objective_head,
-                                                                         {},
+                                                                         objective_args_for_head_config,
                                                                          objective_module)
         self.epoch = 0
         self.dataset_length = {"train": 0, "eval": 0}
@@ -347,16 +349,44 @@ class Objective(abc.ABC):
         logger.warning("Loss computation on the recent sample successful. Loss value: %s", loss.item())
         return loss
 
+    def _per_split_iterator_sources(self, split: str) -> Iterable[str]:
+        """
+        An iterator over source texts.
+        :param split: split to iterate data over
+        :return: Iterable of input texts.
+        """
+        if split == "train":
+            if self.texts is not None:
+                sources_iter = iter(self.texts)
+            else:
+                sources_iter = AdaptationDataset.iter_text_file_per_line(self.texts_path)
+        elif split == "eval":
+            if self.val_texts is not None:
+                sources_iter = iter(self.val_texts)
+            elif self.val_texts_path is not None:
+                sources_iter = AdaptationDataset.iter_text_file_per_line(self.val_texts_path)
+            else:
+                raise ValueError("Objective %s did not get any validation texts :( "
+                                 "Hint: pass `AdaptationArgs(do_eval=False)` to avoid evaluation, "
+                                 "or set Objective(val_texts) param." % self)
+        else:
+            raise ValueError("Unrecognized split: %s" % split)
+
+        return sources_iter
+
     @abc.abstractmethod
-    def _per_split_iterators(self, split: str) -> Union[Iterable[str], Tuple[Iterable[str], Iterable[str]]]:
+    def _per_split_iterators(self, split: str) -> Union[Tuple[Iterable[str], ],
+                                                        Tuple[Iterable[str], Iterable[str]],
+                                                        Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
         """
         Implementations of shared (un/)supervised iterations in (Un/)SupervisedObjective.
-        Not meant to be overriden when implementing custom data set. Instead choose to inherit either
-        from SupervisedObjective, or UnsupervisedObjective (or their ancestors).
+        Not meant to be overriden when implementing custom data set.
+        Choose to inherit either from SupervisedObjective, or UnsupervisedObjective (or their ancestors),
+        or override _get_inputs_iterator() instead.
 
         :param split: Data split to iterate over
 
-        :return: A pair of [inputs_iterator, labels_iterator]
+        :return: A pair of [inputs_iterator, [+input_pairs_iterator,] [+labels_iterator]]
         """
         pass
 
@@ -400,31 +430,6 @@ class Objective(abc.ABC):
 
 class UnsupervisedObjective(Objective, abc.ABC):
 
-    def _per_split_iterator_single(self, split: str) -> Iterable[str]:
-        """
-        An iterator over unsupervised texts.
-        :param split: split to iterate data over
-        :return: Iterable of input texts.
-        """
-        if split == "train":
-            if self.texts is not None:
-                sources_iter = iter(self.texts)
-            else:
-                sources_iter = AdaptationDataset.iter_text_file_per_line(self.texts_path)
-        elif split == "eval":
-            if self.val_texts is not None:
-                sources_iter = iter(self.val_texts)
-            elif self.val_texts_path is not None:
-                sources_iter = AdaptationDataset.iter_text_file_per_line(self.val_texts_path)
-            else:
-                raise ValueError("Objective %s did not get any validation texts :( "
-                                 "Hint: pass `AdaptationArgs(do_eval=False)` to avoid evaluation, "
-                                 "or set Objective(val_texts) param." % self)
-        else:
-            raise ValueError("Unrecognized split: %s" % split)
-
-        return sources_iter
-
     def _per_split_iterators(self, split: str) -> Tuple[Iterable[str], Iterable[str]]:
         """
         Default inputs iterator for unsupervised objectives. Returns input texts as both inputs and labels.
@@ -432,10 +437,10 @@ class UnsupervisedObjective(Objective, abc.ABC):
         :param split: Data split to iterate over
         :return: a pair of identical [inputs_iterator, inputs_iterator]
         """
-        return self._per_split_iterator_single(split), self._per_split_iterator_single(split)
+        return self._per_split_iterator_sources(split), self._per_split_iterator_sources(split)
 
 
-class SupervisedObjective(UnsupervisedObjective, abc.ABC):
+class SupervisedObjective(Objective, abc.ABC):
     labels_path: Optional[str] = None
     labels: Optional[List[str]] = None
 
@@ -560,7 +565,7 @@ class SupervisedObjective(UnsupervisedObjective, abc.ABC):
         :param split: Data split to iterate over
         :return: a pair of identical [inputs_iterator, labels_iterator]
         """
-        sources_iter, _ = super(SupervisedObjective, self)._per_split_iterators(split)
+        sources_iter = self._per_split_iterator_sources(split)
 
         if split == "train":
             if self.texts is not None:

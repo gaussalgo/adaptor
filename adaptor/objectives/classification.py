@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Optional, Union
+from typing import Dict, Iterable, Optional, Union, Iterator
 
 import torch
 from transformers import DataCollatorForTokenClassification, BatchEncoding
@@ -112,7 +112,7 @@ class TokenClassification(SupervisedObjective):
                                           "does not match a number of token labels (%s)" \
                                           % (self.compatible_head, num_outputs, num_labels)
 
-    def _get_inputs_iterator(self, split: str) -> Iterable[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
+    def _get_inputs_iterator(self, split: str) -> Iterator[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
         """
         Constructs input encodings for token classification using Transformers.
         :param split: Selected data split. `train` or `eval`.

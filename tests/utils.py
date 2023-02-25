@@ -28,7 +28,7 @@ test_base_models = {
     },
     "token_classification": "bert-base-cased",
     "sequence_classification": "bert-base-cased",
-    "extractive_QA": "Unbabel/xlm-roberta-comet-small",
+    "extractive_QA": "bert-base-cased",
     "MLM": "bert-base-cased",
     "MLM_student": "distilbert-base-cased"
 }
