@@ -513,7 +513,7 @@ class SupervisedObjective(Objective, abc.ABC):
 
             self.labels_map = {val: i for i, val in enumerate(sorted(set(all_labels)))}
 
-            objective_args_for_head_config = {"num_labels": len(all_labels),
+            objective_args_for_head_config = {"num_labels": len(self.labels_map),
                                               "label2id": self.labels_map,
                                               "id2label": {v: k for k, v in self.labels_map.items()},
                                               **objective_args_for_head_config}

@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="adaptor",
-    version='0.2.0',
+    version='0.2.1',
     description="Adaptor: Objective-centric Adaptation Framework for Language Models.",
     long_description_content_type="text/markdown",
     long_description=readme,
@@ -30,7 +30,7 @@ setup(
     zip_safe=True,
     install_requires=[
         "torch>=1.7",
-        "transformers>=4.10.2",  # intentionally open dependency, but tested with transformers==4.18.0
+        "transformers>=4.10.2<=4.19.1",  # upper-closed on 4.19.1 for now, due to minor bug in eval loss logging
         "sentencepiece",
     ],
     test_require=[
