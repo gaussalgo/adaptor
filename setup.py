@@ -30,7 +30,7 @@ setup(
     zip_safe=True,
     install_requires=[
         "torch>=1.7",
-        "transformers>=4.10.2<=4.19.1",  # upper-closed on 4.19.1 for now, due to minor bug in eval loss logging, but otherwise works with 4.27.1
+        "transformers>=4.10.2<=4.19.1",  # upper-closed on 4.19.1 for now, due to minor bug in eval loss logging
         "sentencepiece",
     ],
     test_require=[
