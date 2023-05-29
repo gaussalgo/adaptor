@@ -183,3 +183,8 @@ class LangModule(torch.nn.Module):
         torch.manual_seed(seed)
         for head, head_model in self.trainable_models.items():
             head_model.apply(reinit_model_weights)
+
+    def gradient_checkpointing_enable(self):
+        for module_id, module in self.trainable_models.items():
+            if hasattr(module, "gradient_checkpointing_enable"):
+                module.gradient_checkpointing_enable()
