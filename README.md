@@ -130,6 +130,7 @@ inputs = tokenizer("Is there any Abraham Lincoln here?", return_tensors="pt")
 outputs = ner_model(**inputs)
 ner_tags = [ner_model.config.id2label[label_id.item()] for label_id in outputs.logits[0].argmax(-1)]
 ```
+**Try this example** on real data, in [`tutorials/adapted_named_entity_recognition.ipynb`](tutorials/adapted_named_entity_recognition.ipynb)
 
 #### Adapted Machine Translation
 
@@ -138,7 +139,7 @@ but eventually, you need to translate a different domain, for example chats with
 or medicine texts with a lot of latin expressions.
 
 ```python
-# 1. pick the models - randomly pre-initialize the appropriate heads
+# 1. pick the base model
 lang_module = LangModule("Helsinki-NLP/opus-mt-en-de")
 
 # (optional) pick train and validation evaluators for the objectives
@@ -176,11 +177,44 @@ output_ids = translator_model.generate(**inputs)
 output_text = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
 print(output_text)
 ```
-**Try this example** with training resources resolution from OPUS in `examples/machine_translation/train_wiki_adapt_bible.py`
+**Try this example** on real data, in [`tutorials/unsupervised_machine_translation.ipynb`](tutorials/unsupervised_machine_translation.ipynb)
 
-#### More examples
+#### Single-objective training
+It also makes sense to use the comfort of adaptor high-level interface in simple use-cases 
+where it's enough to apply one objective.
+```python
+# 1. pick the base model
+lang_module = LangModule(test_base_models["sequence_classification"])
 
-You can find a few more exaples in [tutorials](tutorials), but contributions are welcome :) (see *[CONTRIBUTING.md](CONTRIBUTING.md)*)
+# 2. pick any objective - note that all objectives have almost identical interface
+classification = SequenceClassification(lang_module=lang_module,
+                                        texts_or_path="tests/mock_data/supervised_texts.txt",
+                                        labels_or_path="tests/mock_data/supervised_texts_sequence_labels.txt",
+                                        batch_size=1)
+# 3. Schedule choice does not matter in single-objective training
+schedule = SequentialSchedule(objectives=[classification], args=training_arguments)
+
+# 4. train using Adapter
+adapter = Adapter(lang_module=lang_module, schedule=parallel_schedule, args=training_arguments)
+adapter.train()
+
+# 5. save the trained lang_module
+adapter.save_model("output_model")
+
+# 6. reload and use it like any other Hugging Face model
+classifier = AutoModelForSequenceClassification.from_pretrained("output_model/SequenceClassification")
+tokenizer = AutoTokenizer.from_pretrained("output_model/SequenceClassification")
+
+inputs = tokenizer("A piece of text to translate.", return_tensors="pt")
+output = classifier(**inputs)
+output_label_id = output.logits.argmax(-1)[0].item()
+print("Your new model predicted class: %s" % classifier.config.id2label[output_label_id])
+```
+**Try this example** on real data in [`tutorials/simple_sequence_classification.ipynb`](tutorials/simple_sequence_classification.ipynb)
+
+### More examples
+
+You can find more examples in [tutorials](tutorials). Your contributions are welcome :) (see *[CONTRIBUTING.md](CONTRIBUTING.md)*)
 
 ### Motivation for objective-centric training
 
