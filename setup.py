@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="adaptor",
-    version='0.2.1',
+    version='0.2.2',
     description="Adaptor: Objective-centric Adaptation Framework for Language Models.",
     long_description_content_type="text/markdown",
     long_description=readme,
