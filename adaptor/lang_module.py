@@ -151,7 +151,7 @@ class LangModule(torch.nn.Module):
         :return: Raw model outputs (logits).
         """
         try:
-            selected_head_model = self.trainable_models[str(inputs["oid"])]
+            selected_head_model = self.trainable_models[str(inputs["oid"].tolist()[0])]
         except KeyError:
             raise ValueError("Requesting inference with the objective having no registered head."
                              "If you are using `extra_eval_objectives`, "
