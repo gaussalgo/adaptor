@@ -32,6 +32,7 @@ setup(
         "torch>=1.7",
         "transformers>=4.33.3",
         "sentencepiece",
+        "accelerate>=0.20.1"
     ],
     test_require=[
         "pytest"
