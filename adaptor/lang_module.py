@@ -144,7 +144,7 @@ class LangModule(torch.nn.Module):
 
         return unmatched_modules
 
-    def forward(self,return_loss: bool = True, **inputs) -> torch.LongTensor:
+    def forward(self, return_loss: bool = True, **inputs) -> torch.LongTensor:
         """
         Performs forward pass over the head identified by the sample's `oid`.
         :param inputs: given head input arguments with corresponding values.
