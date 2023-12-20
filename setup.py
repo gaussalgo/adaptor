@@ -30,7 +30,7 @@ setup(
     zip_safe=True,
     install_requires=[
         "torch>=1.7",
-        "transformers",
+        "transformers<=4.30.2",  # TODO upper-closed on 4.30.2: Problem with returning empty batches
         "sentencepiece",
         "accelerate>=0.20.1"
     ],
