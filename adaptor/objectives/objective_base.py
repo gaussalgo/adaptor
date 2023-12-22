@@ -299,7 +299,7 @@ class Objective(abc.ABC):
             return {k: v.to(device) if k != "oid" else v for k, v in sample.items()}
 
         def _add_oid(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-            sample["oid"] = torch.LongTensor([id(self)])
+            sample["oid"] = torch.LongTensor(id(self))
             return sample
 
         def _remember_input(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
