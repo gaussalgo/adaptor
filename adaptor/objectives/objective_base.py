@@ -203,7 +203,7 @@ class Objective(abc.ABC):
 
         if did_not_improve:
             logger.warning("Objective `%s` convergence metric `%s` did not improve for %s eval steps. History: %s" %
-                           (self, stopping_evaluator, patience, last_n))
+                           (self, stopping_evaluator, patience, self.evaluations_history["eval"][stopping_evaluator]))
 
         return passed_patience_evals and did_not_improve
 

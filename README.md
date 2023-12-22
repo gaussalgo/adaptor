@@ -1,4 +1,4 @@
-# Adapt𝒪r: Objective-centric Adaptation library
+# Adaptor: Objective-centric Adaptation library
 
 [![Tests](https://github.com/gaussalgo/adaptor/actions/workflows/test.yml/badge.svg)](https://github.com/gaussalgo/adaptor/actions)
 [![PyPI version](https://badge.fury.io/py/adaptor.svg)](https://badge.fury.io/py/adaptor)
@@ -14,13 +14,13 @@ If you want to jump right in, take a look at the [tutorials](tutorials).
 
 - [Background](#how-to-use-adaptor)
     - [Benefits of Task and Domain Adaptation](#benefits-of-task-and-domain-adaptation)
-    - [How Can Adapt𝒪r Help](#how-can-adaptor-help)
+    - [How Can Adaptor Help](#how-can-adaptor-help)
 - [Usage](#usage)
     - [Install](#usage)
     - [Use-cases](#adapted-named-entity-recognition)
     - **[Tutorials](tutorials)**
 - [How to Contribute](CONTRIBUTING.md)
-- [Cite](#citing-adapt𝒪r)
+- [Cite](#citing-adaptor)
 </details>
 
 
@@ -240,7 +240,7 @@ also be able to fix it, don't hesitate to contribute and create a PR.
 * If you'd just like to share your general impressions or personal experience with others, 
 we're happy to get into a discussion in the [Discussions section](https://github.com/gaussalgo/adaptor/discussions).
 
-## Citing Adapt𝒪r
+## Citing Adaptor
 
 If you use Adaptor in your research, please cite it as follows.
 
