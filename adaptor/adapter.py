@@ -79,7 +79,7 @@ class Adapter(Trainer):
         mock_outputs = torch.tensor([-1, -1])
         return (loss, mock_outputs) if return_outputs else loss
 
-    def log(self, logs: List[Dict[str, float]]) -> None:
+    def log(self, logs: Dict[str, float]) -> None:
         is_eval_log = any(self.eval_metrics_prefix in log_key for log_key in logs)
         extended_logs = self.schedule.objectives_log(split="eval" if is_eval_log else "train")
         return super().log({**logs, **extended_logs})

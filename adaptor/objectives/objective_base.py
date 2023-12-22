@@ -142,7 +142,7 @@ class Objective(abc.ABC):
         out_logs = {}
         # aggregate per-progress_bar-steps, or per-evaluation-steps, keep the results of unprocessed evaluations
         loss_history = self.loss_history[split][-self.max_samples_per_log[split]:]
-        mean_loss = sum(loss_history) / len(loss_history) if len(loss_history) else 0
+        mean_loss = sum(loss_history) / len(loss_history) if len(loss_history) else float("inf")
         self.evaluations_history[split]["loss"].append(mean_loss)
 
         out_logs["%s_%s_loss" % (split, self)] = mean_loss
@@ -203,7 +203,7 @@ class Objective(abc.ABC):
 
         if did_not_improve:
             logger.warning("Objective `%s` convergence metric `%s` did not improve for %s eval steps. History: %s" %
-                           (self, stopping_evaluator, patience, last_n))
+                           (self, stopping_evaluator, patience, self.evaluations_history["eval"][stopping_evaluator]))
 
         return passed_patience_evals and did_not_improve
 
@@ -299,7 +299,7 @@ class Objective(abc.ABC):
             return {k: v.to(device) if k != "oid" else v for k, v in sample.items()}
 
         def _add_oid(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-            sample["oid"] = id(self)
+            sample["oid"] = torch.tensor(id(self))
             return sample
 
         def _remember_input(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:

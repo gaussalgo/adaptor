@@ -144,14 +144,14 @@ class LangModule(torch.nn.Module):
 
         return unmatched_modules
 
-    def forward(self, **inputs) -> torch.LongTensor:
+    def forward(self, return_loss: bool = True, **inputs) -> torch.LongTensor:
         """
         Performs forward pass over the head identified by the sample's `oid`.
         :param inputs: given head input arguments with corresponding values.
         :return: Raw model outputs (logits).
         """
         try:
-            selected_head_model = self.trainable_models[str(inputs["oid"])]
+            selected_head_model = self.trainable_models[str(inputs["oid"].item())]
         except KeyError:
             raise ValueError("Requesting inference with the objective having no registered head."
                              "If you are using `extra_eval_objectives`, "

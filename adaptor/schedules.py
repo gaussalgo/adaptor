@@ -23,7 +23,7 @@ class Schedule(abc.ABC):
 
     label: str
     objectives: Dict[str, Dict[int, Objective]]
-    objectives_outputs_queue: List[Tuple[str, int]]
+    objectives_outputs_queue: List[Tuple[str, torch.LongTensor]]
     converged_objectives: List[Objective]
     should_stop: bool
 
@@ -177,7 +177,7 @@ class Schedule(abc.ABC):
         split, oid = self.objectives_outputs_queue.pop(0)
 
         # the objective loss arrives aggregated into a single item
-        loss = self.objectives[split][oid].compute_loss(logit_outputs, labels, inputs, split)
+        loss = self.objectives[split][oid.item()].compute_loss(logit_outputs, labels, inputs, split)
 
         return loss
 
