@@ -65,9 +65,8 @@ class MaskedLanguageModeling(UnsupervisedObjective):
         return collated_iter
 
     def _compute_loss(self,
-                      logit_outputs: torch.FloatTensor,
-                      labels: torch.LongTensor,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
+                      inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
+                      labels: torch.LongTensor) -> torch.FloatTensor:
         """
         Masked language modeling, as implemented by BERT.
 
@@ -79,6 +78,9 @@ class MaskedLanguageModeling(UnsupervisedObjective):
         """
         # token classification loss, from transformers.BertForMaskedLM
         loss_fct = CrossEntropyLoss()
+
+        logit_outputs = self.compatible_head_model(**inputs).logits
+
         vocab_size = logit_outputs.size()[-1]
         masked_lm_loss = loss_fct(logit_outputs.view(-1, vocab_size), labels.view(-1))
         return masked_lm_loss

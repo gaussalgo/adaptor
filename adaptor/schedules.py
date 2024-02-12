@@ -162,13 +162,11 @@ class Schedule(abc.ABC):
             logger.warning("Scheduler reached a termination condition: %s" % stopping_strategy.name)
 
     def compute_loss(self,
-                     logit_outputs: torch.FloatTensor,
-                     labels: torch.Tensor,
-                     inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
+                     inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
+                     labels: torch.Tensor) -> torch.FloatTensor:
         """
         Retrieves a loss from the corresponding objective.
 
-        :param logit_outputs: Raw model outputs.
         :param labels: Corresponding expected outputs.
         :param inputs: Input sample corresponding to given model output (logits) and ground truth (labels).
 
@@ -177,7 +175,8 @@ class Schedule(abc.ABC):
         split, oid = self.objectives_outputs_queue.pop(0)
 
         # the objective loss arrives aggregated into a single item
-        loss = self.objectives[split][oid.item()].compute_loss(logit_outputs, labels, inputs, split)
+        inputs.pop("oid")
+        loss = self.objectives[split][oid.item()].compute_loss(inputs, labels, split)
 
         return loss
 

@@ -112,7 +112,7 @@ class TokenClassification(SupervisedObjective):
                                           "does not match a number of token labels (%s)" \
                                           % (self.compatible_head, num_outputs, num_labels)
 
-    def _get_inputs_iterator(self, split: str) -> Iterator[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
+    def _get_inputs_iterator(self, split: str) -> Iterable[Dict[str, torch.LongTensor]]:
         """
         Constructs input encodings for token classification using Transformers.
         :param split: Selected data split. `train` or `eval`.
@@ -126,9 +126,8 @@ class TokenClassification(SupervisedObjective):
         return aligned_collated_iter
 
     def _compute_loss(self,
-                      logit_outputs: torch.FloatTensor,
+                      inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
                       labels: torch.LongTensor,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
                       attention_mask: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         """
         Computes a loss for model outputs on a single token classification batch.
@@ -139,6 +138,7 @@ class TokenClassification(SupervisedObjective):
         """
         # generic token classification loss, originally implemented e.g. in transformers.BertForTokenClassification
 
+        logit_outputs = self.compatible_head_model(**inputs).logits
         loss_fct = torch.nn.CrossEntropyLoss()
         # Only keep active parts of the loss
         if attention_mask is not None:
@@ -159,9 +159,8 @@ class SequenceClassification(SupervisedObjective):
     compatible_head = Head.SEQ_CLASSIFICATION
 
     def _compute_loss(self,
-                      logit_outputs: torch.FloatTensor,
-                      labels: torch.LongTensor,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
+                      inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
+                      labels: torch.LongTensor) -> torch.FloatTensor:
         """
         Computes a loss for model outputs on a single sequence classification batch.
         :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
@@ -169,6 +168,7 @@ class SequenceClassification(SupervisedObjective):
         :param labels: Expected labels.
         :return: loss value with grad_fn.
         """
+        logit_outputs = self.compatible_head_model(**inputs).logits
         # based on transformers.modeling_bert.BertForSequenceClassification
         if labels.dim() == 1:
             # single-label classification

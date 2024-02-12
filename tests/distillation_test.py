@@ -11,7 +11,7 @@ def assert_module_objective_ok(lang_module: LangModule, objective: Objective, sp
     # providing labels makes HF lang_module to compute its own loss, which is in DA redundantly done by Objective
     outputs = lang_module(**dataset_sample)
 
-    loss = objective.compute_loss(outputs, dataset_sample["labels"], dataset_sample, split)
+    loss = objective.compute_loss(dataset_sample, dataset_sample["labels"], split)
 
     # check that retrieved loss has a backward_fn
     loss.backward()

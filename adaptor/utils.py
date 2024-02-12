@@ -14,7 +14,8 @@ class Head(Enum):
     CLM = 5
     MLM = 6
     QA = 7
-    UNKNOWN = 8
+    ENCODING = 8
+    UNKNOWN = 9
 
 
 class StoppingStrategy(Enum):

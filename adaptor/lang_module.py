@@ -3,6 +3,7 @@ import inspect
 from typing import List, Dict, Any, Optional
 
 import torch
+from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForSequenceClassification, \
     AutoModelForTokenClassification, AutoModelForSeq2SeqLM, AutoModelForCausalLM, \
     AutoModelForMaskedLM, AutoModelForQuestionAnswering
@@ -60,6 +61,13 @@ class LangModule(torch.nn.Module):
             new_head = AutoModelForMaskedLM.from_pretrained(model_name_or_path, **head_kwargs)
         elif head_type == Head.QA:
             new_head = AutoModelForQuestionAnswering.from_pretrained(model_name_or_path, **head_kwargs)
+        elif head_type == Head.ENCODING:
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError:
+                raise ImportError("To use adaptor for training encoders, install adaptor with sentence_transformers: "
+                                  "`pip install adaptor[encoders]`")
+            new_head = SentenceTransformer(model_name_or_path)
         else:
             new_head = torch.load(model_name_or_path, **head_kwargs)
 

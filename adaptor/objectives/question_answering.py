@@ -57,19 +57,19 @@ class ExtractiveQA(SupervisedObjective):
             yield collator(batch_features)
 
     def _compute_loss(self,
-                      model_outputs: QuestionAnsweringModelOutput,
+                      inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
                       labels: torch.LongTensor,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None,
                       attention_mask: Optional[torch.LongTensor] = None) -> torch.FloatTensor:
         """
         Computes a loss for model outputs on a single question answering batch.
-        :param model_outputs: QuestionAnsweringModelOutput.
         :param labels: Expected labels.
         :param attention_mask: Mask of the tokens to compute loss on.
         :return: loss value with grad_fn.
         """
         loss_fct = torch.nn.CrossEntropyLoss()
 
+        model_outputs = self.compatible_head_model(**{k: v for k, v in inputs.items()
+                                                      if k not in ("start_position", "end_position", "labels")})
         # following keys need to be present in the model output
         start_logits = model_outputs["start_logits"]
         end_logits = model_outputs["end_logits"]

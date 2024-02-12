@@ -148,13 +148,14 @@ class Distillation(Objective, abc.ABC):
         return loss
 
     def _compute_loss(self,
-                      student_logits: torch.FloatTensor,
-                      labels: torch.LongTensor,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
+                      inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
+                      labels: torch.LongTensor) -> torch.FloatTensor:
         assert inputs is not None, "Distillation loss requires model inputs to be passed"
 
         # output logits' loss
         ce_loss = CrossEntropyLoss()
+
+        student_logits = self.compatible_head_model(**inputs).logits
 
         teacher_inputs = inspect.getfullargspec(self.teacher_model.forward).args
         with torch.no_grad():

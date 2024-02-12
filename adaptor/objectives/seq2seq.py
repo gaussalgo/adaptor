@@ -88,9 +88,8 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
         self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
 
     def _compute_loss(self,
-                      lm_logit_outputs: torch.FloatTensor,
-                      labels: torch.LongTensor,
-                      inputs: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]] = None) -> torch.FloatTensor:
+                      inputs: Union[BatchEncoding, Dict[str, torch.Tensor]],
+                      labels: torch.LongTensor) -> torch.FloatTensor:
         """
         Computes sequence2sequence loss
         :param inputs: Input encoding corresponding to given `logit_outputs` and `labels`.
@@ -101,6 +100,8 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
         # note that currently we do not ignore padding from the loss, which might be desirable
         # - we have seen this to eliminate repetitive generations at some cases
         loss_fct = torch.nn.CrossEntropyLoss()
+
+        lm_logit_outputs = self.compatible_head_model(**inputs).logits
         # vocab-agnostic loss circumvents incorrectly-set vocab_size of some models (e.g. mt5)
         lm_loss = loss_fct(lm_logit_outputs.flatten(end_dim=1), labels.flatten())
 

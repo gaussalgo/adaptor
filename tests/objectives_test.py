@@ -15,10 +15,11 @@ def assert_module_objective_ok(lang_module: LangModule, objective: Objective, sp
     dataset_sample = next(iter(objective.get_dataset(split, objective_i=0, device="cpu")))
 
     # providing labels makes HF lang_module to compute its own loss, which is in DA redundantly done by Objective
-    outputs = lang_module(**dataset_sample)
+    # outputs = lang_module(**dataset_sample)
 
     # loss computation test, possible label smoothing is performed by Adapter
-    loss = objective.compute_loss(outputs, dataset_sample["labels"], dataset_sample, split)
+    loss = objective.compute_loss({k: v for k, v in dataset_sample.items() if k not in ("oid",)},
+                                  dataset_sample["labels"], split)
 
     # check that retrieved loss has a backward_fn
     loss.backward()

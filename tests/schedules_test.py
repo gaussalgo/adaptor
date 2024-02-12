@@ -27,9 +27,7 @@ args = AdaptationArguments(output_dir="adaptation_output_dir",
 
 def assert_schedule(lang_module: LangModule, schedule: Schedule):
     for batch in iter(schedule.iterable_dataset("train")):
-        logit_outputs = lang_module(**batch)
-
-        loss_combined = schedule.compute_loss(logit_outputs, batch["labels"], batch)
+        loss_combined = schedule.compute_loss(batch, batch["labels"])
         loss_combined.backward()
 
     # every objective has some key in its logs
@@ -37,9 +35,7 @@ def assert_schedule(lang_module: LangModule, schedule: Schedule):
     assert all(any(str(obj) for log_key, _ in train_logs.items()) for obj in schedule.objectives["train"].keys())
 
     for batch in iter(schedule.iterable_dataset("eval")):
-        logit_outputs = lang_module(**batch)
-
-        loss_combined = schedule.compute_loss(logit_outputs, batch["labels"], batch)
+        loss_combined = schedule.compute_loss(batch, batch["labels"])
         loss_combined.backward()
 
     eval_logs = schedule.objectives_log("eval")
