@@ -1,7 +1,7 @@
 import abc
 import itertools
 import logging
-from typing import List, Union, Optional, Iterable, Tuple, Dict, Sequence, Any, Iterator
+from typing import List, Union, Optional, Iterable, Tuple, Dict, Sequence, Any
 
 import torch
 from tqdm import trange, tqdm
