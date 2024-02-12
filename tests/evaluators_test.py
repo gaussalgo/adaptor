@@ -8,12 +8,9 @@ from adaptor.objectives.seq2seq import Sequence2Sequence
 from utils import paths, test_base_models
 
 
-def assert_evaluator_logs(lang_module: LangModule, objective: Objective, split: str) -> None:
+def assert_evaluator_logs(objective: Objective, split: str) -> None:
     # dataset iteration test
     dataset_sample = next(iter(objective.get_dataset(split, objective_i=0, device="cpu")))
-
-    # providing labels makes HF lang_module to compute its own loss, which is in DA redundantly done by Objective
-    outputs = lang_module(**dataset_sample)
 
     # request objective for its loss
     loss = objective.compute_loss(dataset_sample, dataset_sample["labels"], split)
@@ -41,7 +38,7 @@ def assert_gen_evaluator_logs(evaluator: GenerativeEvaluator, split: str) -> Non
                                       train_evaluators=[evaluator],
                                       val_evaluators=[evaluator])
 
-    assert_evaluator_logs(gen_lang_module, gen_objective, split)
+    assert_evaluator_logs(gen_objective, split)
 
 
 def assert_gen_evaluator_logs_mbart(evaluator: GenerativeEvaluator, split: str) -> None:
@@ -54,7 +51,7 @@ def assert_gen_evaluator_logs_mbart(evaluator: GenerativeEvaluator, split: str) 
                                       source_lang_id=test_base_models["translation_multi"]["test_src_lang"],
                                       target_lang_id=test_base_models["translation_multi"]["test_tgt_lang"])
 
-    assert_evaluator_logs(gen_lang_module_multi, gen_objective, split)
+    assert_evaluator_logs(gen_objective, split)
 
 
 def assert_ner_evaluator_logs(evaluator: TokenClassificationEvaluator, split: str) -> None:
@@ -68,7 +65,7 @@ def assert_ner_evaluator_logs(evaluator: TokenClassificationEvaluator, split: st
                                         train_evaluators=[evaluator],
                                         val_evaluators=[evaluator])
 
-    assert_evaluator_logs(lang_module, gen_objective, split)
+    assert_evaluator_logs(gen_objective, split)
 
 
 def assert_classification_evaluator_logs(evaluator: SeqClassificationEvaluator, split: str) -> None:
@@ -82,7 +79,7 @@ def assert_classification_evaluator_logs(evaluator: SeqClassificationEvaluator, 
                                            train_evaluators=[evaluator],
                                            val_evaluators=[evaluator])
 
-    assert_evaluator_logs(lang_module, gen_objective, split)
+    assert_evaluator_logs(gen_objective, split)
 
 
 def assert_qa_evaluator_logs(evaluator: ExtractiveQAEvaluator, split: str) -> None:
@@ -97,7 +94,7 @@ def assert_qa_evaluator_logs(evaluator: ExtractiveQAEvaluator, split: str) -> No
                                 train_evaluators=[evaluator],
                                 val_evaluators=[evaluator])
 
-    assert_evaluator_logs(lang_module, qa_objective, split)
+    assert_evaluator_logs(qa_objective, split)
 
 
 def test_bleu():

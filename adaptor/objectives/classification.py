@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Optional, Union, Iterator
+from typing import Dict, Iterable, Optional, Union
 
 import torch
 from transformers import DataCollatorForTokenClassification, BatchEncoding

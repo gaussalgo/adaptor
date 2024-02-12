@@ -2,7 +2,6 @@ from typing import Dict, Optional, Tuple, Union, Iterator, List
 
 import torch
 from transformers import DataCollatorWithPadding, BatchEncoding
-from transformers.modeling_outputs import QuestionAnsweringModelOutput
 
 from ..objectives.objective_base import SupervisedObjective
 from ..utils import Head

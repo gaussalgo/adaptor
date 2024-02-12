@@ -1,5 +1,5 @@
 import abc
-from typing import List, Union, Dict, Iterable, Optional
+from typing import List, Union, Dict, Iterable
 
 import torch
 from torch.nn import CrossEntropyLoss
