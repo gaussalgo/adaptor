@@ -52,7 +52,7 @@ class SequentialMixin(Objective, abc.ABC):
             # yield last nonempty residual batch
             yield self.collator(features_batch)
 
-    def _get_inputs_iterator(self, split: str) -> Iterator[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
+    def _get_inputs_iterator(self, split: str) -> Iterable[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
         """
         Creates a default iterator over encodings with aligned input and output texts.
         :param split: Data split. `train` or `eval`.

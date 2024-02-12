@@ -3,6 +3,7 @@ from adaptor.objectives.CLM import CausalLanguageModeling
 from adaptor.objectives.MLM import MaskedLanguageModeling
 from adaptor.objectives.backtranslation import BackTranslation, BackTranslator
 from adaptor.objectives.classification import TokenClassification
+from adaptor.objectives.distillation import Distillation
 from adaptor.objectives.denoising import DenoisingObjective
 from adaptor.objectives.objective_base import Objective
 from adaptor.objectives.question_answering import ExtractiveQA
@@ -123,6 +124,83 @@ def test_supervised_seq2seq_objective_mbart():
     assert_module_objective_ok(lang_module, objective)
 
 
+def test_distillation_seq():
+    from adaptor.objectives.seq2seq import Sequence2Sequence
+    from transformers import AutoModelForSeq2SeqLM
+
+    class DistilledSeq2Seq(Distillation, Sequence2Sequence):
+        # this is a full implementation of distillation within other objective
+        pass
+
+    lang_module = LangModule(test_base_models["translation_mono"])
+    distilled_model = AutoModelForSeq2SeqLM.from_pretrained(test_base_models["translation_mono"])
+
+    objective = DistilledSeq2Seq(lang_module,
+                                 teacher_model=distilled_model,
+                                 texts_or_path=paths["texts"]["translation"],
+                                 labels_or_path=paths["labels"]["translation"],
+                                 batch_size=4)
+
+    assert_module_objective_ok(lang_module, objective)
+
+
+def test_distillation_mlm():
+    from adaptor.objectives.MLM import MaskedLanguageModeling
+    from transformers import AutoModelForMaskedLM
+
+    class DistilledMLM(Distillation, MaskedLanguageModeling):
+        pass
+
+    lang_module = LangModule(test_base_models["MLM_student"])
+    distilled_model = AutoModelForMaskedLM.from_pretrained(test_base_models["MLM"])
+
+    objective = DistilledMLM(lang_module,
+                             teacher_model=distilled_model,
+                             texts_or_path=paths["texts"]["unsup"],
+                             batch_size=4)
+
+    assert_module_objective_ok(lang_module, objective)
+
+
+def test_distillation_mlm_incl_hidden_states():
+    from adaptor.objectives.MLM import MaskedLanguageModeling
+    from transformers import AutoModelForMaskedLM
+
+    class DistilledMLM(Distillation, MaskedLanguageModeling):
+        pass
+
+    lang_module = LangModule(test_base_models["MLM_student"])
+    distilled_model = AutoModelForMaskedLM.from_pretrained(test_base_models["MLM"])
+
+    objective = DistilledMLM(lang_module,
+                             teacher_model=distilled_model,
+                             add_hidden_states_loss=True,
+                             texts_or_path=paths["texts"]["unsup"],
+                             batch_size=4)
+
+    assert_module_objective_ok(lang_module, objective)
+
+
+def test_distillation_mlm_restrict_to_attention():
+    from adaptor.objectives.MLM import MaskedLanguageModeling
+    from transformers import AutoModelForMaskedLM
+
+    class DistilledMLM(Distillation, MaskedLanguageModeling):
+        pass
+
+    lang_module = LangModule(test_base_models["MLM_student"])
+    distilled_model = AutoModelForMaskedLM.from_pretrained(test_base_models["MLM"])
+
+    objective = DistilledMLM(lang_module,
+                             teacher_model=distilled_model,
+                             add_hidden_states_loss=True,
+                             restrict_loss_to_mask=True,
+                             texts_or_path=paths["texts"]["unsup"],
+                             batch_size=4)
+
+    assert_module_objective_ok(lang_module, objective)
+
+
 def test_supervised_QA_objective():
     lang_module = LangModule(test_base_models["extractive_QA"])
 
@@ -133,3 +211,15 @@ def test_supervised_QA_objective():
                              batch_size=4)
 
     assert_module_objective_ok(lang_module, objective)
+
+
+# def test_search_objective():
+#     lang_module = LangModule(test_base_models["extractive_QA"])
+#
+#     objective = Encoding(lang_module,
+#                          texts_or_path=paths["texts"]["QA"],
+#                          text_pair_or_path=paths["text_pair"]["QA"],
+#                          labels_or_path=paths["labels"]["QA"],
+#                          batch_size=4)
+#
+#     assert_module_objective_ok(lang_module, objective)

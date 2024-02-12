@@ -339,10 +339,11 @@ class Objective(abc.ABC):
 
         logger.warning("Computing model output")
         model_inputs = {k: v for k, v in self.last_input.items() if k not in ("oid", "labels")}
-        logits = self.compatible_head_model(**model_inputs).logits
+        outputs = self.compatible_head_model(**model_inputs)
+        logger.warning("Model outputs computation on the recent sample successful. Outputs: %s", outputs)
 
         logger.warning("Computing loss")
-        loss = self._compute_loss(logits, labels, self.last_input)
+        loss = self._compute_loss(self.last_input, labels)
 
         logger.warning("Loss computation on the recent sample successful. Loss value: %s", loss.item())
         return loss
@@ -519,7 +520,7 @@ class SupervisedObjective(Objective, abc.ABC):
         return super().register_compatible_head_model(lang_module, other_objective,
                                                       objective_args_for_head_config, preloaded_module)
 
-    def _get_inputs_iterator(self, split: str) -> Iterator[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
+    def _get_inputs_iterator(self, split: str) -> Iterable[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
         """
         Batches and encodes input texts and corresponding labels.
         :param split: Selected data split. `train` or `eval`.

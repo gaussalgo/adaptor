@@ -2,7 +2,7 @@ import abc
 import collections
 import itertools
 import random
-from typing import List, Tuple, Optional, Iterator
+from typing import List, Tuple, Optional, Iterable
 
 from transformers import BatchEncoding
 
@@ -147,7 +147,7 @@ class DenoisingObjective(Sequence2SequenceMixin, UnsupervisedObjective):
             out_text = noising_fn(out_text, self.noising_per_sentence)
         return out_text
 
-    def _get_inputs_iterator(self, split: str) -> Iterator[BatchEncoding]:
+    def _get_inputs_iterator(self, split: str) -> Iterable[BatchEncoding]:
         """
         Generates labels by applying selected noising strategies on inputs.
         :param split: Data split. `train` or `eval`.
