@@ -69,11 +69,7 @@ class Adapter(Trainer):
                      return_outputs: bool = False) -> Union[torch.FloatTensor, Tuple[torch.FloatTensor, None]]:
         labels = inputs["labels"] if "labels" in inputs else inputs["label"]
 
-        if self.label_smoother is not None:
-            raise NotImplementedError()  # implementation of label smoothing is objective-dependent
-            # loss = self.label_smoother(outputs, labels)
-        else:
-            loss = self.schedule.compute_loss(inputs, labels)
+        loss = self.schedule.compute_loss(inputs, labels)
 
         mock_outputs = torch.tensor([-1, -1])
         return (loss, mock_outputs) if return_outputs else loss

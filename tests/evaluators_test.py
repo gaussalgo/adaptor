@@ -13,8 +13,7 @@ def assert_evaluator_logs(objective: Objective, split: str) -> None:
     dataset_sample = next(iter(objective.get_dataset(split, objective_i=0, device="cpu")))
 
     # request objective for its loss
-    loss = objective.compute_loss({k: v for k, v in dataset_sample.items() if k not in ("oid",)},
-                                  dataset_sample["labels"], split)
+    loss = objective.compute_loss(dataset_sample, dataset_sample["labels"], split)
     assert loss.item()
 
     log = objective.per_objective_log(split)

@@ -150,9 +150,7 @@ class Objective(abc.ABC):
 
         for evaluator in self.evaluators[split]:
             dataset = self.get_dataset(split, 0, self.compatible_head_model.device,
-                                       firstn=self.max_samples_per_log[split],
-                                       add_oid=False,
-                                       is_training_dataset=False)
+                                       firstn=self.max_samples_per_log[split], is_training_dataset=False)
             # evaluator should already return an aggregated value, so unlike loss, we don't average it
             evaluator_value = evaluator(self.compatible_head_model, self.tokenizer, dataset)
             self.evaluations_history[split][evaluator].append(evaluator_value)
@@ -261,7 +259,6 @@ class Objective(abc.ABC):
                     objective_i: int,
                     device: Union[str, torch.device],
                     firstn: Optional[int] = None,
-                    add_oid: bool = True,
                     is_training_dataset: bool = True,
                     show_progressbar: bool = True) -> TransformerAdaptationDataset:
         """
@@ -270,8 +267,8 @@ class Objective(abc.ABC):
         :param objective_i: Rank of this objective in schedule. Used only to properly set up progress bar.
         :param device: Device to transfer this data set to.
         :param firstn: If given, a number of the retrieved items from the dataset.
-        :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
         :param is_training_dataset: Whether this dataset is used for training -> if to update the epochs counter.
+        :param show_progressbar: Whether to maintain a dataset iterator progress bar for this objective.
 
         :return: TransformerAdaptationDataset wrapping a data set of this objective.
         """
@@ -293,12 +290,8 @@ class Objective(abc.ABC):
 
         inputs_iter = self._get_inputs_iterator(split)
 
-        def _sample_to_device(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-            return {k: v.to(device) if k != "oid" else v for k, v in sample.items()}
-
-        def _add_oid(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-            sample["oid"] = torch.tensor(id(self))
-            return sample
+        def _sample_to_device(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.Tensor]:
+            return {k: v.to(device) for k, v in sample.items()}
 
         def _remember_input(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
             self.last_input = sample
@@ -310,9 +303,6 @@ class Objective(abc.ABC):
 
         device_inputs_iter = map(_sample_to_device, inputs_iter)
 
-        if add_oid:
-            device_inputs_iter = map(_add_oid, device_inputs_iter)
-
         if firstn is not None and firstn < self.dataset_length[split]:
             device_inputs_iter = itertools.islice(device_inputs_iter, firstn)
 
@@ -323,6 +313,9 @@ class Objective(abc.ABC):
             device_inputs_iter = map(_update_pbar, device_inputs_iter)
 
         return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split])
+
+    def get_id(self) -> int:
+        return id(self)
 
     def compute_loss_on_last_sample(self) -> torch.FloatTensor:
         """
@@ -338,7 +331,7 @@ class Objective(abc.ABC):
         labels = self.last_input["labels"]
 
         logger.warning("Computing model output")
-        model_inputs = {k: v for k, v in self.last_input.items() if k not in ("oid", "labels")}
+        model_inputs = {k: v for k, v in self.last_input.items() if k not in ("labels")}
         outputs = self.compatible_head_model(**model_inputs)
         logger.warning("Model outputs computation on the recent sample successful. Outputs: %s", outputs)
 

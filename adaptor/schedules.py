@@ -175,8 +175,7 @@ class Schedule(abc.ABC):
         split, oid = self.objectives_outputs_queue.pop(0)
 
         # the objective loss arrives aggregated into a single item
-        inputs.pop("oid")
-        loss = self.objectives[split][oid.item()].compute_loss(inputs, labels, split)
+        loss = self.objectives[split][oid].compute_loss(inputs, labels, split)
 
         return loss
 
@@ -191,7 +190,7 @@ class Schedule(abc.ABC):
         """
         dataset = objective.get_dataset("eval", obj_i, self.args.device)
         for sample in dataset:
-            self.objectives_outputs_queue.append(("eval", sample["oid"]))
+            self.objectives_outputs_queue.append(("eval", objective.get_id()))
             yield sample
 
     def _infinite_train_objective_sampler(self, objective: Objective, obj_i: int) -> Iterator[Dict[str, Any]]:
@@ -209,7 +208,7 @@ class Schedule(abc.ABC):
 
             dataset = objective.get_dataset("train", obj_i, self.args.device)
             for sample in dataset:
-                self.objectives_outputs_queue.append(("train", sample["oid"]))
+                self.objectives_outputs_queue.append(("train", objective.get_id()))
                 yield sample
 
     def _sample_objective_dataset(self, objective: Objective, obj_i: int, split: str) -> Iterator[Dict[str, Any]]:

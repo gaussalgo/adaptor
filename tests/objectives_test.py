@@ -19,8 +19,7 @@ def assert_module_objective_ok(lang_module: LangModule, objective: Objective, sp
     # outputs = lang_module(**dataset_sample)
 
     # loss computation test, possible label smoothing is performed by Adapter
-    loss = objective.compute_loss({k: v for k, v in dataset_sample.items() if k not in ("oid",)},
-                                  dataset_sample["labels"], split)
+    loss = objective.compute_loss(dataset_sample, dataset_sample["labels"], split)
 
     # check that retrieved loss has a backward_fn
     loss.backward()
