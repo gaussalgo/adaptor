@@ -577,7 +577,8 @@ class SupervisedObjective(Objective, abc.ABC):
             elif self.val_labels_path is not None:
                 targets_iter = AdaptationDataset.iter_text_file_per_line(self.val_labels_path)
             else:
-                raise ValueError("Objective %s did not get any validation labels :( "
+                raise ValueError("You asked for validation, "
+                                 "but Objective %s did not get any validation labels :( "
                                  "Hint: pass `AdaptationArgs(do_eval=False)` to avoid evaluation, "
                                  "or set Objective(val_labels) param." % self)
 

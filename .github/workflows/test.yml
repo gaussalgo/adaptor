@@ -44,7 +44,7 @@ jobs:
           set -ex
           python -V
           pip install -U pip
-          pip install -e .[generative,examples]
+          pip install -e .[generative,examples,encoders]
           pip install pytype
       - name: Type check adaptor
         run: pytype adaptor
@@ -69,7 +69,7 @@ jobs:
           set -ex
           python -V
           pip install -U pip
-          pip install -e .[generative]
+          pip install -e .[generative,encoders]
           pip install pytest
       - name: Unit tests
         run: cd tests && pytest .

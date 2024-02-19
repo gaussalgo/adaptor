@@ -3,8 +3,9 @@ from adaptor.objectives.CLM import CausalLanguageModeling
 from adaptor.objectives.MLM import MaskedLanguageModeling
 from adaptor.objectives.backtranslation import BackTranslation, BackTranslator
 from adaptor.objectives.classification import TokenClassification
-from adaptor.objectives.distillation import Distillation
 from adaptor.objectives.denoising import DenoisingObjective
+from adaptor.objectives.distillation import Distillation
+from adaptor.objectives.encoding import PairEncodingObjective
 from adaptor.objectives.objective_base import Objective
 from adaptor.objectives.question_answering import ExtractiveQA
 from adaptor.objectives.seq2seq import Sequence2Sequence
@@ -212,13 +213,13 @@ def test_supervised_QA_objective():
     assert_module_objective_ok(lang_module, objective)
 
 
-# def test_search_objective():
-#     lang_module = LangModule(test_base_models["extractive_QA"])
-#
-#     objective = Encoding(lang_module,
-#                          texts_or_path=paths["texts"]["QA"],
-#                          text_pair_or_path=paths["text_pair"]["QA"],
-#                          labels_or_path=paths["labels"]["QA"],
-#                          batch_size=4)
-#
-#     assert_module_objective_ok(lang_module, objective)
+def test_pair_encoding_objective():
+    lang_module = LangModule(test_base_models["extractive_QA"])
+
+    objective = PairEncodingObjective(lang_module,
+                                      texts_or_path=paths["texts"]["QA"],
+                                      text_pair_or_path=paths["text_pair"]["QA"],
+                                      labels_or_path=paths["labels"]["QA"],
+                                      batch_size=4)
+
+    assert_module_objective_ok(lang_module, objective)
