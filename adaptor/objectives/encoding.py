@@ -1,7 +1,8 @@
 import abc
-from typing import Tuple, Union, List, Dict, Iterable, Optional
+from typing import Tuple, Union, List, Dict, Iterable, Optional, Callable
 
 import torch
+from sentence_transformers import SentenceTransformer
 from torch import Tensor
 from transformers import BatchEncoding
 
@@ -65,8 +66,14 @@ class Encoding(Objective, abc.ABC):
         :param labels: Assigned labels.
         :return: loss value with grad_fn.
         """
-        self.loss_function.model = self.compatible_head_model
+        # self.loss_function.model = self.compatible_head_model
+        # TODO: inputs do not contain text_pairs, 'sentence_embeddings' are computed likely only from input_ids
+        # TODO: this needs to be fixed, ideally, to compute sentence_embeddings only here
         loss = self.loss_function(inputs, labels)
+        # in self.loss_function, we can compute loss as:
+        # embeddings = self.model(sentence_features)['sentence_embedding'].unsqueeze(1)
+        # output = self.cos_score_transformation(torch.cosine_similarity(embeddings[0], embeddings[1]))
+        # loss = self.loss_fct(output, labels.view(-1))
         return loss
 
 
@@ -76,9 +83,12 @@ class PairEncodingObjective(SupervisedObjective, Encoding):
                  *args,
                  text_pair_or_path: Union[str, List[str]],
                  val_text_pair_or_path: Optional[Union[str, List[str]]] = None,
+                 loss_function: Callable[[SentenceTransformer], torch.nn.Module],
                  **kwargs):
         super().__init__(*args, text_pair_or_path=text_pair_or_path,
                          val_text_pair_or_path=val_text_pair_or_path, **kwargs)
+
+        self.loss_function = loss_function(self.compatible_head_model)
 
 
 class TripletEncodingObjective(SupervisedObjective, Encoding):
@@ -94,7 +104,7 @@ class TripletEncodingObjective(SupervisedObjective, Encoding):
                  val_positive_text_pair_or_path: Optional[Union[str, List[str]]] = None,
                  negative_text_pair_or_path: Union[str, List[str]],
                  val_negative_text_pair_or_path: Optional[Union[str, List[str]]] = None,
-                 loss_function: torch.nn.Module,
+                 loss_function: Callable[[SentenceTransformer], torch.nn.Module],
                  **kwargs):
         super().__init__(*args, text_pair_or_path=positive_text_pair_or_path,
                          val_text_pair_or_path=val_positive_text_pair_or_path, **kwargs)
@@ -112,7 +122,7 @@ class TripletEncodingObjective(SupervisedObjective, Encoding):
 
         self.negative_text_pair_or_path = negative_text_pair_or_path
 
-        self.loss_function = loss_function
+        self.loss_function = loss_function(self.compatible_head_model)
 
     def _per_split_iterators(self, split: str) -> Tuple[Iterable[str], Iterable[str], Iterable[str], Iterable[str]]:
         queries_iter, positives_iter, targets_iter = super()._per_split_iterators(split)

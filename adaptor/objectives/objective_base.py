@@ -537,8 +537,12 @@ class SupervisedObjective(Objective, abc.ABC):
             else:
                 text, label = source_target_tuple
                 out_sample = self.tokenizer(text, truncation=True)
-
-            out_sample["label"] = torch.tensor(self.labels_map[label])
+            if self.compatible_head in (Head.TOKEN_CLASSIFICATION, Head.SEQ_CLASSIFICATION):
+                # label from a closed, already known set (categorical outputs)
+                out_sample["label"] = torch.tensor(self.labels_map[label])
+            else:
+                # open-domain outputs
+                out_sample["label"] = torch.tensor(label)
 
             batch_features.append(out_sample)
             if len(batch_features) == self.batch_size:
@@ -560,7 +564,7 @@ class SupervisedObjective(Objective, abc.ABC):
         sources_iter = self._per_split_iterator_sources(split)
 
         if split == "train":
-            if self.texts is not None:
+            if self.labels is not None:
                 targets_iter = iter(self.labels)
             else:
                 targets_iter = AdaptationDataset.iter_text_file_per_line(self.labels_path)

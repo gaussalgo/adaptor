@@ -214,12 +214,17 @@ def test_supervised_QA_objective():
 
 
 def test_pair_encoding_objective():
+    from sentence_transformers.losses import CosineSimilarityLoss
+
     lang_module = LangModule(test_base_models["extractive_QA"])
 
+    loss_fn = CosineSimilarityLoss
+
     objective = PairEncodingObjective(lang_module,
+                                      loss_function=loss_fn,
                                       texts_or_path=paths["texts"]["QA"],
                                       text_pair_or_path=paths["text_pair"]["QA"],
-                                      labels_or_path=paths["labels"]["QA"],
+                                      labels_or_path=[0.7 for _ in enumerate(paths["labels"]["QA"])],
                                       batch_size=4)
 
     assert_module_objective_ok(lang_module, objective)
