@@ -44,6 +44,7 @@ setup(
             "bert-score",
             "fairseq",
             "protobuf<=3.20.1",
+            "numpy<1.24"  # constrained by integration of a prism metric, can be removed, once prism is deprecated
         ],
         "examples": [
             "comet-ml",
