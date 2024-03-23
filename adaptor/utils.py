@@ -44,17 +44,27 @@ class AdaptationDataset(IterableDataset, abc.ABC):
 
     @staticmethod
     def iter_text_file_per_line(path: str) -> Iterable[str]:
-        with open(path) as f:
-            for line in f:
-                yield line.strip()
+        """
+        Iterate over the lines of a file on a given path.
+        At this point, `path` is checked to be of a supported format.
+        :param path: file path
+        """
+        if path.endswith(".txt"):
+            with open(path) as f:
+                for line in f:
+                    yield line.strip()
+        elif path.endswith(".gz"):
+            import gzip
+            import io
+            with io.TextIOWrapper(io.BufferedReader(gzip.open(path))) as file:
+                for line in file:
+                    yield line.strip()
 
 
 class TransformerAdaptationDataset(AdaptationDataset):
-    def __init__(
-        self,
-        batch_encoding_params: Iterable[Dict[str, torch.LongTensor]],
-        length: Optional[int] = None,
-    ):
+    def __init__(self,
+                 batch_encoding_params: Iterable[Dict[str, torch.LongTensor]],
+                 length: Optional[int] = None):
         """
         :param batch_encoding_params: Arguments to be passed to BatchEncoding (input_ids, attention_mask, labels)
         """
@@ -80,7 +90,6 @@ class TransformerAdaptationDataset(AdaptationDataset):
 
 
 class AdaptationArguments(TrainingArguments):
-
     fixed_adaptation_args = {
         "per_device_train_batch_size": 1,  # batching is done by Objective, no two distinct batches
         "per_device_eval_batch_size": 1,  # should be present in a single infer batch
@@ -93,28 +102,20 @@ class AdaptationArguments(TrainingArguments):
         "remove_unused_columns": False,  # from transformers 4.19.x, this would remove batches' control attributes
     }
 
-    def __init__(
-        self,
-        stopping_strategy: StoppingStrategy,
-        stopping_patience: Optional[int] = 10,
-        also_log_converged_objectives: Optional[bool] = True,
-        **kwargs
-    ):
-
+    def __init__(self,
+                 stopping_strategy: StoppingStrategy,
+                 stopping_patience: Optional[int] = 10,
+                 also_log_converged_objectives: Optional[bool] = True,
+                 **kwargs):
         # novel arguments, w.r.t. original TrainingArguments
         self.stopping_strategy = stopping_strategy
         self.stopping_patience = stopping_patience
         self.log_converged_objectives = also_log_converged_objectives
 
         # adjustments of the defaults expected by Scheduler
-        unexpected_adjusted_args = [
-            arg for arg in kwargs.keys() if arg in self.fixed_adaptation_args.keys()
-        ]
+        unexpected_adjusted_args = [arg for arg in kwargs.keys() if arg in self.fixed_adaptation_args.keys()]
         if unexpected_adjusted_args:
-            raise ValueError(
-                "You should not set these TrainingArgs for Adaptation: %s"
-                % unexpected_adjusted_args
-            )
+            raise ValueError("You should not set these TrainingArgs for Adaptation: %s" % unexpected_adjusted_args)
 
         # set default values to fixed args
         kwargs = {**kwargs, **self.fixed_adaptation_args}

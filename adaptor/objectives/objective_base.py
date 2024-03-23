@@ -107,12 +107,12 @@ class Objective(abc.ABC):
         self.val_texts_path = None
 
         if isinstance(texts_or_path, str):
+            self._check_supported_data_source_format(texts_or_path)
             self.texts_path = texts_or_path
-            with open(self.texts_path) as f:
-                self.dataset_length["train"] = len(f.readlines())
         else:
             self.texts = texts_or_path
-            self.dataset_length["train"] = len(self.texts)
+
+        self.dataset_length["train"] = self._compute_data_source_length(texts_or_path)
 
         for split, given_evaluators in zip(("train", "eval"), (train_evaluators, val_evaluators)):
             for given_evaluator in given_evaluators:
@@ -126,12 +126,40 @@ class Objective(abc.ABC):
 
         if val_texts_or_path is not None:
             if isinstance(val_texts_or_path, str):
+                self._check_supported_data_source_format(val_texts_or_path)
                 self.val_texts_path = val_texts_or_path
-                with open(self.val_texts_path) as f:
-                    self.dataset_length["eval"] = len(f.readlines())
             else:
                 self.val_texts = val_texts_or_path
-                self.dataset_length["eval"] = len(self.val_texts)
+
+            self.dataset_length["eval"] = self._compute_data_source_length(val_texts_or_path)
+
+    def _check_supported_data_source_format(self, path: str) -> None:
+        # when the passed data source is a file, we check that it is in a supported format:
+        # we support .txt and .tar.gz files
+        supported_file_formats = ['.txt', '.gz']
+
+        if not any(path.endswith(suffix) for suffix in supported_file_formats):
+            raise ValueError("Objective %s's given {val_}texts_or_path `%s` is not a List "
+                             "and does not end with one of supported suffixes: ['.txt', '.tar.gz']."
+                             "If you want to use a file data source, please pass it in a supported format."
+                             % (self, path))
+
+    def _compute_data_source_length(self, texts_or_path: Union[str, List[str]]) -> int:
+        if isinstance(texts_or_path, str):
+            if texts_or_path.endswith('.txt'):
+                with open(self.texts_path, "rb") as f:
+                    return sum(1 for _ in f)  # more efficient line count
+            if texts_or_path.endswith('.gz'):
+                import io
+                import gzip
+                with io.TextIOWrapper(io.BufferedReader(gzip.open(texts_or_path))) as f:
+                    return sum(1 for _ in f)  # more efficient line count
+        elif isinstance(texts_or_path, list):
+            return len(texts_or_path)
+        else:
+            raise ValueError("Objective %s's data format (%s) is not supported. "
+                             "Please pass in a List[str], or str denoting a path to a file."
+                             % (self, type(texts_or_path)))
 
     def per_objective_log(self, split: str) -> Dict[str, float]:
         """
@@ -456,24 +484,29 @@ class SupervisedObjective(Objective, abc.ABC):
                  **kwargs):
 
         if isinstance(labels_or_path, str):
+            # data source is a file: we support .txt and .tar.gz files
+            self._check_supported_data_source_format(labels_or_path)
             self.labels_path = labels_or_path
         else:
             self.labels = labels_or_path
 
         if val_labels_or_path is not None:
             if isinstance(val_labels_or_path, str):
+                self._check_supported_data_source_format(val_labels_or_path)
                 self.val_labels_path = val_labels_or_path
             else:
                 self.val_labels = val_labels_or_path
 
         if text_pair_or_path is not None:
             if isinstance(text_pair_or_path, str):
+                self._check_supported_data_source_format(text_pair_or_path)
                 self.text_pair_path = text_pair_or_path
             else:
                 self.text_pair = text_pair_or_path
 
         if val_text_pair_or_path is not None:
             if isinstance(val_text_pair_or_path, str):
+                self._check_supported_data_source_format(val_text_pair_or_path)
                 self.val_text_pair_path = val_text_pair_or_path
             else:
                 self.val_text_pair = val_text_pair_or_path
