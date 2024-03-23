@@ -105,7 +105,8 @@ class LangModule(torch.nn.Module):
     @staticmethod
     def _partially_merge_models(orig_model: torch.nn.Module,
                                 new_model: torch.nn.Module,
-                                top_level: bool = True) -> List[str]:
+                                top_level: bool = True,
+                                no_merge_keys_containing: Optional[str] = None) -> List[str]:
         """
         Matches and merges shared parameters of the models.
         Presumes that a vocabulary (tokenizer) of the both models does match (assured by shared self.tokenizer).
@@ -130,23 +131,39 @@ class LangModule(torch.nn.Module):
                             orig_model_param == new_model_param):
                         setattr(new_model, new_param_key, orig_model_param)
                         assert id(getattr(orig_model, new_param_key)) == id(getattr(new_model, new_param_key))
+                    else:
+                        unmatched_modules += [new_param_key]
+                else:
+                    unmatched_modules += [new_param_key]
         else:
             # non-leaf node -> merge in a separate branch
             for child_attr, child_module in children.items():
-                if hasattr(orig_model, child_attr):
-                    unmatched_modules += LangModule._partially_merge_models(getattr(orig_model, child_attr),
-                                                                            getattr(new_model, child_attr),
-                                                                            top_level=False)
-                else:
+                if not hasattr(orig_model, child_attr):
+                    # do not merge if the orig_model does not contain the attribute
                     unmatched_modules += list(dict(getattr(new_model, child_attr).named_parameters()).keys())
+                    continue
+                if (no_merge_keys_containing is not None) and (no_merge_keys_containing in child_attr):
+                    # do not merge if the attribute is excluded
+                    unmatched_modules += list(dict(getattr(new_model, child_attr).named_parameters()).keys())
+                    continue
+                # merge all non-excluded cases
+                unmatched_modules += LangModule._partially_merge_models(getattr(orig_model, child_attr),
+                                                                        getattr(new_model, child_attr),
+                                                                        top_level=False)
+
         # check that merge-able modules now refer to the same physical address
         if top_level:
             for i, (new_param_key, orig_model_param) in enumerate(orig_model.named_parameters()):
-                if new_param_key in dict(new_model.named_parameters()):
-                    new_model_param = new_model.get_parameter(new_param_key)
-                    if orig_model_param.shape == new_model_param.shape and \
-                            torch.all(orig_model_param == new_model_param):
-                        assert id(new_model_param) == id(orig_model_param)
+                if new_param_key not in dict(new_model.named_parameters()):
+                    continue
+                if no_merge_keys_containing is not None and no_merge_keys_containing in new_param_key:
+                    continue
+                new_model_param = new_model.get_parameter(new_param_key)
+                if not orig_model_param.shape == new_model_param.shape:
+                    continue
+                if not torch.all(orig_model_param == new_model_param):
+                    continue
+                assert id(new_model_param) == id(orig_model_param), "New objective's model was not properly merged."
 
         return unmatched_modules
 
