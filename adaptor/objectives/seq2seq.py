@@ -19,9 +19,9 @@ class SequentialMixin(Objective, abc.ABC):
                  source_lang_id: Optional[str] = None,
                  target_lang_id: Optional[str] = None,
                  **kwargs):
-        super().__init__(*args, **kwargs)
         self.source_lang_id = source_lang_id
         self.target_lang_id = target_lang_id
+        super().__init__(*args, **kwargs)
 
     def _get_seq2seq_collated_iterator(self,
                                        source_texts: Iterable[str],
