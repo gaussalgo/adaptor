@@ -60,7 +60,7 @@ class Schedule(abc.ABC):
         self.args = args
 
     @abc.abstractmethod
-    def _sample_objectives(self, split: str) -> Iterable[Objective]:
+    def do_schedule(self, split: str) -> Iterable[Objective]:
         """
         Constructs an iterable determining an ordering of sampling objectives.
         Override only this method to implement custom Schedule.
@@ -203,7 +203,7 @@ class Schedule(abc.ABC):
         :return: Iterator over evaluation samples.
         """
         while True:
-            # check for stopping conditions at the beginning of every epoch's objective
+            # check for stopping conditions at the beginning of every objective's epoch
             self.remember_if_should_stop()
 
             dataset = objective.get_dataset("train", obj_i, self.args.device)
@@ -222,13 +222,13 @@ class Schedule(abc.ABC):
     def _combine_datasets(self, split: str) -> Iterable[Dict[str, Any]]:
         """
         Constructs combined iterator over the datasets of all objectives,
-        according to the implemented `_sample_objectives`.
+        according to the implemented `do_schedule`.
         This main training iteration is upper-bound by a `num_epochs` over a full data set.
         :param split: data split to iterate.
         :return: Iterator over samples of selected split.
         """
         if split == "train":
-            objective_sampler = self._sample_objectives(split)
+            objective_sampler = self.do_schedule(split)
         else:
             # evaluation split uses simple, sequential evaluation over objectives
             objective_sampler = SequentialSchedule.single_iteration_eval_sampling(self.objectives["eval"].values())
@@ -263,7 +263,7 @@ class SequentialSchedule(Schedule):
 
     label = "sequential"
 
-    def _sample_objectives(self, split: str) -> Iterator[Objective]:
+    def do_schedule(self, split: str) -> Iterator[Objective]:
         """
         Sample objectives in a sequential order - each objective is sampled for its `dataset_length` steps.
 
@@ -294,7 +294,7 @@ class ParallelSchedule(Schedule):
 
     label = "parallel"
 
-    def _sample_objectives(self, split: str) -> Iterator[Objective]:
+    def do_schedule(self, split: str) -> Iterator[Objective]:
         """
         Sample objectives in parallel - choose objectives in Round Robin fashion.
         :param split: data split to iterate. `train` or `eval`. Currently, Schedule base uses only "train".
