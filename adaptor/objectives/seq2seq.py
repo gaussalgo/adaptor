@@ -74,12 +74,10 @@ class Sequence2SequenceMixin(SequentialMixin, abc.ABC):
         """
         Refer to the documentation of superclass.
         """
-        # adjust only default max_samples_per_*log, since generative evaluation is much slower
+        # adjust only default max_batches_per_eval, since generative evaluation is much slower
         # but stick to user selection, if there is any
-        if "max_samples_per_log" not in kwargs:
-            kwargs["max_samples_per_log"] = 20
-        if "max_samples_per_eval_log" not in kwargs:
-            kwargs["max_samples_per_eval_log"] = 100
+        if "max_batches_per_eval" not in kwargs:
+            kwargs["max_batches_per_eval"] = 100
 
         super().__init__(*args, **kwargs)
 

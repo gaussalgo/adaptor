@@ -100,6 +100,7 @@ class AdaptationArguments(TrainingArguments):
         "disable_tqdm": True,  # scheduler takes care of top-level terminal monitoring
         "dataloader_pin_memory": False,  # does not necessarily match the shapes in multi-objective training
         "remove_unused_columns": False,  # from transformers 4.19.x, this would remove batches' control attributes
+        "label_names": ["labels"],  # transformers use a fixed map for models' labels map, not containing our LangModule
     }
 
     def __init__(self,
@@ -115,7 +116,7 @@ class AdaptationArguments(TrainingArguments):
         # adjustments of the defaults expected by Scheduler
         unexpected_adjusted_args = [arg for arg in kwargs.keys() if arg in self.fixed_adaptation_args.keys()]
         if unexpected_adjusted_args:
-            raise ValueError("You should not set these TrainingArgs for Adaptation: %s" % unexpected_adjusted_args)
+            raise ValueError("You should not set these TrainingArgs with Adaptor: %s" % unexpected_adjusted_args)
 
         # set default values to fixed args
         kwargs = {**kwargs, **self.fixed_adaptation_args}

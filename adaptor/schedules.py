@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import List, Iterable, Dict, Any, Tuple, Iterator, Union
+from typing import List, Iterable, Dict, Any, Tuple, Iterator, Union, Optional
 
 import torch
 from transformers import TrainerCallback, TrainingArguments, TrainerState, TrainerControl, BatchEncoding
@@ -23,7 +23,7 @@ class Schedule(abc.ABC):
 
     label: str
     objectives: Dict[str, Dict[int, Objective]]
-    objectives_outputs_queue: List[Tuple[str, torch.LongTensor]]
+
     converged_objectives: List[Objective]
     should_stop: bool
 
@@ -60,7 +60,7 @@ class Schedule(abc.ABC):
         self.args = args
 
     @abc.abstractmethod
-    def do_schedule(self, split: str) -> Iterable[Objective]:
+    def schedule_sampling(self, split: str) -> Iterable[Objective]:
         """
         Constructs an iterable determining an ordering of sampling objectives.
         Override only this method to implement custom Schedule.
@@ -222,16 +222,16 @@ class Schedule(abc.ABC):
     def _combine_datasets(self, split: str) -> Iterable[Dict[str, Any]]:
         """
         Constructs combined iterator over the datasets of all objectives,
-        according to the implemented `do_schedule`.
+        according to the implemented `schedule_sampling`.
         This main training iteration is upper-bound by a `num_epochs` over a full data set.
         :param split: data split to iterate.
         :return: Iterator over samples of selected split.
         """
         if split == "train":
-            objective_sampler = self.do_schedule(split)
+            objective_sampler = self.schedule_sampling(split)
         else:
             # evaluation split uses simple, sequential evaluation over objectives
-            objective_sampler = SequentialSchedule.single_iteration_eval_sampling(self.objectives["eval"].values())
+            objective_sampler = SequentialSchedule.single_round_sampling(self.objectives["eval"].values())
 
         objectives_data_samplers = {obj: self._sample_objective_dataset(obj, obj_i, split)
                                     for obj_i, obj in enumerate(self.objectives[split].values())}
@@ -246,24 +246,28 @@ class Schedule(abc.ABC):
             if self.should_stop:
                 return
 
-    def iterable_dataset(self, split: str) -> TransformerAdaptationDataset:
+    def iterable_dataset(self, split: str, objective: Optional[Objective] = None) -> TransformerAdaptationDataset:
         """
         Constructs IterableDataset from the samples of schedule's objective.
         :param split: data split to iterate. `train` or `eval`.
         :return: AdaptationDataset combined according to this Schedule.
         """
-        length_combined = int(sum((o.dataset_length[split] // o.batch_size) for o in self.objectives[split].values()))
-        if split == "train":
-            length_combined *= int(self.args.num_train_epochs)
+        if objective is not None:
+            dataset_length = objective.dataset_length[split] // objective.batch_size
+            return TransformerAdaptationDataset(self._sample_objective_dataset(objective, 0, split), dataset_length)
+        else:
+            dataset_length = int(sum((o.dataset_length[split] // o.batch_size) for o in self.objectives[split].values()))
+            if split == "train":
+                dataset_length *= int(self.args.num_train_epochs)
 
-        return TransformerAdaptationDataset(self._combine_datasets(split), length_combined)
+            return TransformerAdaptationDataset(self._combine_datasets(split), dataset_length)
 
 
 class SequentialSchedule(Schedule):
 
     label = "sequential"
 
-    def do_schedule(self, split: str) -> Iterator[Objective]:
+    def schedule_sampling(self, split: str) -> Iterator[Objective]:
         """
         Sample objectives in a sequential order - each objective is sampled for its `dataset_length` steps.
 
@@ -279,7 +283,7 @@ class SequentialSchedule(Schedule):
                     yield objective
 
     @staticmethod
-    def single_iteration_eval_sampling(objectives: Iterable[Objective]) -> Iterable[Objective]:
+    def single_round_sampling(objectives: Iterable[Objective]) -> Iterable[Objective]:
         """
         Simple finite, single iteration over all objectives. Used by base Schedule for evaluation.
         :param objectives: Objectives to schedule.
@@ -294,7 +298,7 @@ class ParallelSchedule(Schedule):
 
     label = "parallel"
 
-    def do_schedule(self, split: str) -> Iterator[Objective]:
+    def schedule_sampling(self, split: str) -> Iterator[Objective]:
         """
         Sample objectives in parallel - choose objectives in Round Robin fashion.
         :param split: data split to iterate. `train` or `eval`. Currently, Schedule base uses only "train".

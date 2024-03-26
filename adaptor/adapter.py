@@ -2,9 +2,9 @@ import logging
 import os
 from typing import List, Dict, Tuple, Union, Optional
 
-from transformers import WEIGHTS_NAME
 import torch
 from transformers import Trainer, BatchEncoding
+from transformers import WEIGHTS_NAME
 from transformers.modeling_utils import unwrap_model
 
 from .lang_module import LangModule
@@ -46,7 +46,7 @@ class Adapter(Trainer):
         super().__init__(model=lang_module,
                          args=args,
                          train_dataset=self.schedule.iterable_dataset(split="train"),
-                         eval_dataset=self.schedule.iterable_dataset(split="eval"),
+                         eval_dataset=None,  # eval_dataset arg is ignored, Adaptor.evaluate() performs custom iteration
                          data_collator=self.flattened_collator,
                          compute_metrics=None,  # would require a static prediction format among objectives
                          callbacks=orig_callbacks + [schedule.should_stop_check_callback()],
@@ -79,9 +79,16 @@ class Adapter(Trainer):
         extended_logs = self.schedule.objectives_log(split="eval" if is_eval_log else "train")
         return super().log({**logs, **extended_logs})
 
-    def evaluate(self, *args, **kwargs) -> Dict[str, float]:
+    def evaluate_loss(self, *args, **kwargs) -> Dict[str, float]:
+        # self.model = objective.compatible_head_model
+        # eval_dataset = self.schedule.iterable_dataset("eval", objective=objective)
+        eval_dataset = self.schedule.iterable_dataset("eval")
+        objective_logs = super(Adapter, self).evaluate(eval_dataset, *args, **kwargs)
+        return objective_logs
+
+    def evaluate_old(self, *args, **kwargs) -> Dict[str, float]:
         logger.warning("Evaluating...")
-        out = super(Adapter, self).evaluate(*args, **kwargs)
+        out = super(Adapter, self).evaluate(*args, **kwargs)  # TODO: this fails because of removal of forward in LangModule (stransformers branch)
         if "metric_key_prefix" in kwargs:
             self.eval_metrics_prefix = kwargs["metric_key_prefix"]
 
@@ -89,6 +96,29 @@ class Adapter(Trainer):
         self.eval_dataset = self.schedule.iterable_dataset("eval")
 
         return out
+
+    def evaluate(self, *args, **kwargs) -> Dict[str, float]:
+        logger.warning("Evaluating...")
+        self.schedule.mode = "eval"
+
+        # out_logs_gen = self.schedule.objectives_log("eval")
+        # loss evaluations:
+        out_logs_all = {}
+
+        self.evaluate_loss(*args, **kwargs)
+        for objective in self.schedule.objectives["eval"].values():
+            # self.evaluate_objective_loss(objective, *args, **kwargs)
+            gen_metrics_logs = objective.per_objective_log("eval")
+            out_logs_all = {**out_logs_all, **gen_metrics_logs}
+
+        print(out_logs_all)  # HF trainer also prints eval outputs, so we stick to the user-familiar convention
+
+        if "metric_key_prefix" in kwargs:
+            self.eval_metrics_prefix = kwargs["metric_key_prefix"]
+
+        self.schedule.mode = "train"
+
+        return out_logs_all
 
     def save_model(self, output_dir: Optional[str] = None, **kwargs) -> None:
         # HF native reload compatibility

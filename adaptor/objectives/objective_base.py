@@ -1,6 +1,7 @@
 import abc
 import itertools
 import logging
+from functools import partial
 from typing import List, Union, Optional, Iterable, Tuple, Dict, Sequence, Any
 
 import torch
@@ -51,8 +52,7 @@ class Objective(abc.ABC):
                  objective_args_for_head_config: Dict[str, Any] = {},
                  objective_id: Optional[str] = "",
                  loss_weight: Optional[float] = 1,
-                 max_samples_per_log: int = 1000,
-                 max_samples_per_eval_log: int = 10000,
+                 max_batches_per_eval: int = 10000,
                  remember_last_input: Optional[bool] = False):
         """
         Shared initialisation logic of every Objective.
@@ -72,8 +72,7 @@ class Objective(abc.ABC):
         :param objective_id: Identifier of this objective, used in logging and checkpoints persistence.
         Necessary, if you train with multiple objectives of the same type, otherwise they might override each other.
         :param loss_weight: A scalar of the loss of this objective in multi-objective training.
-        :param max_samples_per_log: Maximum number batches that this objective will compute for logging.
-        :param max_samples_per_eval_log: Maximum number batches that this objective will compute for evaluation logging.
+        :param max_batches_per_eval: Maximum number of batches that this objective will compute for evaluation logging.
         :param remember_last_input: Debugging feature: whether the objective should remember the last input
         to its compatible model. Useful for debugging a development of the new objective;
         If the training fails (in the interactive - `-i` mode), the last, possibly error input can be retrieved
@@ -97,7 +96,7 @@ class Objective(abc.ABC):
         self.loss_history = {"train": [], "eval": []}  # loss is treated differently than other outputs
         self.evaluators = {"train": [], "eval": []}
         self.evaluations_history = {"train": {}, "eval": {}}
-        self.max_samples_per_log = {"train": max_samples_per_log, "eval": max_samples_per_eval_log}
+        self.max_batches_per_eval = max_batches_per_eval
 
         self.progressbar = {}
 
@@ -175,10 +174,13 @@ class Objective(abc.ABC):
 
         out_logs["%s_%s_loss" % (split, self)] = mean_loss
         out_logs["%s_%s_num_batches" % (split, self)] = len(loss_history)
+        self.loss_history[split] = []
+        self.evaluations_history[split]["loss"].append(mean_loss)
+
+        out_logs["%s_%s_loss" % (split, self)] = mean_loss
 
         for evaluator in self.evaluators[split]:
-            dataset = self.get_dataset(split, 0, self.compatible_head_model.device,
-                                       firstn=self.max_samples_per_log[split], is_training_dataset=False)
+            dataset = self.get_dataset(split, 0, self.compatible_head_model.device, is_training_dataset=False)
             # evaluator should already return an aggregated value, so unlike loss, we don't average it
             evaluator_value = evaluator(self.compatible_head_model, self.tokenizer, dataset)
             self.evaluations_history[split][evaluator].append(evaluator_value)
@@ -285,8 +287,7 @@ class Objective(abc.ABC):
     def get_dataset(self,
                     split: str,
                     objective_i: int,
-                    device: Union[str, torch.device],
-                    firstn: Optional[int] = None,
+                    device: Optional[Union[str, torch.device]] = None,
                     is_training_dataset: bool = True,
                     show_progressbar: bool = True) -> TransformerAdaptationDataset:
         """
@@ -294,7 +295,6 @@ class Objective(abc.ABC):
         :param split: A split of the retrieved dataset. `train` or `eval`.
         :param objective_i: Rank of this objective in schedule. Used only to properly set up progress bar.
         :param device: Device to transfer this data set to.
-        :param firstn: If given, a number of the retrieved items from the dataset.
         :param is_training_dataset: Whether this dataset is used for training -> if to update the epochs counter.
         :param show_progressbar: Whether to maintain a dataset iterator progress bar for this objective.
 
@@ -305,21 +305,17 @@ class Objective(abc.ABC):
             # - get_dataset is also called from self.per_objective_log, or specific objectives
             self.epoch += 1 if split == "train" else 0
 
-        if show_progressbar:
-            self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
-                                             desc=str(self),
-                                             unit="batches",
-                                             position=objective_i,
-                                             leave=True)
-            self.progressbar[split].set_postfix(refresh=False, split=split, epoch=self.epoch, loss=-1)
-        else:
-            # we do not update loss, if no progress bar is pertained
-            self.progressbar[split] = None
-
         inputs_iter = self._get_inputs_iterator(split)
 
-        def _sample_to_device(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.Tensor]:
-            return {k: v.to(device) for k, v in sample.items()}
+        def _sample_to_device(chosen_device: Optional[Union[str, torch.device]],
+                              sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.Tensor]:
+            if chosen_device is None:
+                # default device is a device of the model assigned to this objective, if it is set
+                # if it is not, we resort to "cpu"
+                # in classic training, the model is always assigned when the dataset is requested
+                assert self.compatible_head_model is not None  # TODO: check and remove
+                chosen_device = self.compatible_head_model.device if self.compatible_head_model is not None else "cpu"
+            return {k: v.to(chosen_device) for k, v in sample.items()}
 
         def _remember_input(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
             self.last_input = sample
@@ -329,16 +325,28 @@ class Objective(abc.ABC):
             self.progressbar[split].update(1)
             return sample
 
-        device_inputs_iter = map(_sample_to_device, inputs_iter)
+        device_inputs_iter = map(partial(_sample_to_device, device), inputs_iter)
 
-        if firstn is not None and firstn < self.dataset_length[split]:
-            device_inputs_iter = itertools.islice(device_inputs_iter, firstn)
+        if split == "eval" and self.max_batches_per_eval is not None:
+            device_inputs_iter = itertools.islice(device_inputs_iter, self.max_batches_per_eval)
+            self.dataset_length["eval"] = self.max_batches_per_eval * self.batch_size
 
         if self.remember_last_input:
             device_inputs_iter = map(_remember_input, device_inputs_iter)
 
         if show_progressbar:
+            # set up a new progressbar object
+            self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
+                                             desc=str(self),
+                                             unit="batches",
+                                             position=objective_i,
+                                             leave=True)
+            self.progressbar[split].set_postfix(refresh=False, split=split, epoch=self.epoch, loss=-1)
+            # assign a hook to the iterator, to update the progressbar on every yielded sample
             device_inputs_iter = map(_update_pbar, device_inputs_iter)
+        else:
+            # we do not update loss, if no progress bar is pertained
+            self.progressbar[split] = None
 
         return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split])
 
