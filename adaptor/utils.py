@@ -48,15 +48,16 @@ class AdaptationDataset(IterableDataset, abc.ABC):
         At this point, `path` is checked to be of a supported format.
         :param path: file path
         """
-        if path.endswith(".txt"):
-            with open(path) as f:
-                for line in f:
-                    yield line.strip()
-        elif path.endswith(".gz"):
+        if path.endswith(".gz"):
             import gzip
             import io
             with io.TextIOWrapper(io.BufferedReader(gzip.open(path))) as file:
                 for line in file:
+                    yield line.strip()
+        else:
+            # assumes plain, newline-separated text file
+            with open(path) as f:
+                for line in f:
                     yield line.strip()
 
 
