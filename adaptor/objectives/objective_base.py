@@ -38,6 +38,7 @@ class Objective(abc.ABC):
     evaluations_history: Dict[str, Dict[Union[str, EvaluatorBase], List[float]]]
     progressbar: Dict[str, tqdm]
     evaluators: Dict[str, List[EvaluatorBase]]
+    data_iteration_offset: int
 
     num_samples_per_log: Dict[str, int]
 
@@ -55,6 +56,7 @@ class Objective(abc.ABC):
                  loss_weight: Optional[float] = 1,
                  max_samples_per_log: int = 1000,
                  max_samples_per_eval_log: int = 10000,
+                 data_iteration_offset: int = 0,
                  remember_last_input: Optional[bool] = False):
         """
         Shared initialisation logic of every Objective.
@@ -90,17 +92,20 @@ class Objective(abc.ABC):
         self.remember_last_input = remember_last_input
         self.last_input = None
 
-        self.compatible_head_model = self.register_compatible_head_model(lang_module,
-                                                                         share_other_objective_head,
-                                                                         objective_args_for_head_config,
-                                                                         objective_module)
         self.epoch = 0
         self.dataset_length = {"train": 0, "eval": 0}
         self.loss_history = {"train": [], "eval": []}  # loss is treated differently than other outputs
         self.evaluators = {"train": [], "eval": []}
         self.evaluations_history = {"train": {}, "eval": {}}
         self.max_samples_per_log = {"train": max_samples_per_log, "eval": max_samples_per_eval_log}
+        self.data_iteration_offset = 0
 
+        self.compatible_head_model = self.register_compatible_head_model(lang_module,
+                                                                         share_other_objective_head,
+                                                                         objective_args_for_head_config,
+                                                                         objective_module)
+        if data_iteration_offset:  # can override obtained trainer_state["global_step"] in continued training
+            self.data_iteration_offset = data_iteration_offset
         self.progressbar = {}
 
         self.texts = None
@@ -145,8 +150,8 @@ class Objective(abc.ABC):
 
         if not any(path.endswith(suffix) for suffix in supported_file_formats):
             logger.warning("Objective %s's given {val_}texts_or_path `%s` is not a List "
-                            "and does not end with one of supported suffixes: ['.txt', '.gz']."
-                            "We'll assume that the file is a line-separated plaintext file." % (self, path))
+                           "and does not end with one of supported suffixes: ['.txt', '.gz']."
+                           "We'll assume that the file is a line-separated plaintext file." % (self, path))
 
     def _compute_data_source_length(self, texts_or_path: Union[str, List[str]]) -> int:
         if isinstance(texts_or_path, str):
@@ -352,6 +357,14 @@ class Objective(abc.ABC):
         if self.remember_last_input:
             device_inputs_iter = map(_remember_input, device_inputs_iter)
 
+        # Support for continued training:
+        # if this is a first iteration, fast-forward data iteration to the self.offset_steps
+        dataset_samples_offset = self.data_iteration_offset % self.dataset_length[split] if self.epoch == 1 else 0
+        # adjust the current epoch accordingly
+        self.epoch = (self.data_iteration_offset // self.dataset_length[split]) + 1
+        # do not apply the offset again in the next epochs
+        self.data_iteration_offset = 0
+
         if show_progressbar:
             # set up a new progressbar object
             self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
@@ -366,7 +379,7 @@ class Objective(abc.ABC):
             # we do not update loss, if no progress bar is pertained
             self.progressbar[split] = None
 
-        return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split])
+        return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split], dataset_samples_offset)
 
     def compute_loss_on_last_sample(self) -> torch.FloatTensor:
         """
@@ -452,12 +465,29 @@ class Objective(abc.ABC):
         """
         head_config = objective_args_for_head_config if objective_args_for_head_config is not None else {}
 
-        if other_objective is not None:
+        # Support for continued training:
+        checkpoint_dir = None
+        possible_checkpoint_path = os.path.join(lang_module.model_name_or_path, str(self))
+        if os.path.exists(possible_checkpoint_path):
+            logger.warning("Reloading objective %s's module from checkpoint %s", str(self), possible_checkpoint_path)
+            checkpoint_dir = possible_checkpoint_path
+
+            # adjust data iterator according to trainer_state -- in continued training, it is guaranteed that it exists
+            from transformers import TrainerState
+            trainer_state = TrainerState.load_from_json(os.path.join(lang_module.model_name_or_path,
+                                                                     "trainer_state.json"))
+            self.data_iteration_offset = trainer_state.global_step
+
+        elif other_objective is not None:
             logger.warning("Objective %s will use %s head of %s objective",
                            self, self.compatible_head.name, other_objective)
             preloaded_module = other_objective.compatible_head_model
 
-        return lang_module.load_training_head(self.compatible_head, str(id(self)), head_config, preloaded_module)
+        return lang_module.load_training_head(self.compatible_head,
+                                              str(id(self)),
+                                              checkpoint_dir,
+                                              head_config,
+                                              preloaded_module)
 
     def __str__(self) -> str:
         """

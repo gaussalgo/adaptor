@@ -1,11 +1,14 @@
+import copy
 import logging
 import os
 from typing import List, Dict, Tuple, Union, Optional
 
-from transformers import WEIGHTS_NAME
+from peft import PeftModel
+from transformers import WEIGHTS_NAME, TrainerState
 import torch
 from transformers import Trainer, BatchEncoding
 from transformers.modeling_utils import unwrap_model
+from transformers.trainer import TRAINER_STATE_NAME
 
 from .lang_module import LangModule
 from .schedules import Schedule
@@ -48,7 +51,7 @@ class Adapter(Trainer):
                          train_dataset=self.schedule.iterable_dataset(split="train"),
                          eval_dataset=self.schedule.iterable_dataset(split="eval"),
                          data_collator=self.flattened_collator,
-                         compute_metrics=None,  # would require a static prediction format among objectives
+                         compute_metrics=None,  # logged metrics are handled by Objectives
                          callbacks=orig_callbacks + [schedule.should_stop_check_callback()],
                          **kwargs)
 
@@ -95,9 +98,42 @@ class Adapter(Trainer):
 
         return out
 
+    def _save_module(self, module: torch.nn.Module, output_module_path: str) -> None:
+        # simple wrapper to save an arbitrary model to a directory in a standard format
+        # for each objective, we also persist a shared tokenizer to make each Objective independently loadable
+        self.model.tokenizer.save_pretrained(output_module_path)
+
+        if hasattr(module, "save_pretrained") or hasattr(unwrap_model(module), "save_pretrained"):
+            # if the head module has "save_pretrained" method, it will be called for persistence
+            module.save_pretrained(output_module_path, use_diff=False, safe_serialization=False)
+        else:
+            # otherwise, we persist only a raw pytorch module
+            torch.save(module.state_dict(), os.path.join(output_module_path, WEIGHTS_NAME))
+
     def save_model(self, output_dir: Optional[str] = None, **kwargs) -> None:
         # HF native reload compatibility
         objectives_counter = {str(obj): 0 for obj in self.schedule.objectives["train"].values()}
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # also save the base model, if any of our objectives are peft models
+        if (self.args.save_peft_base_model and
+            any(isinstance(o.compatible_head_model, PeftModel) for o in self.schedule.objectives["train"].values())):
+            # For simplicity, we assume that base models for all pefts are the same
+            # -- this might be violated only if the user passes custom model_head to Objective
+            # and additionally creates a peft module on it.
+            # Thus, we retrieve a base model from an arbitrary (i.e. the first) peft-model objective
+            peft_obj = next(o for o in self.schedule.objectives["train"].values()
+                            if isinstance(o.compatible_head_model, PeftModel))
+
+            orig_model = copy.deepcopy(peft_obj.compatible_head_model)
+            while isinstance(orig_model, PeftModel):
+                # we find cases where unload() does not return the base model on the first call
+                orig_model = orig_model.unload()
+
+            base_model_path = os.path.join(output_dir, "base_model")
+            self._save_module(orig_model, base_model_path)
+            logger.info(f"Base model for PEFT objectives saved in {base_model_path}")
 
         for objective_id in self.schedule.objectives["train"].keys():
             module = self.model.trainable_models[str(objective_id)]
@@ -109,15 +145,25 @@ class Adapter(Trainer):
                 output_module_path += "_{}".format(objectives_counter[str(objective)])
                 objectives_counter[str(objective)] += 1
 
-            # we persist a shared tokenizer and training args either way
-            self.model.tokenizer.save_pretrained(output_module_path)
+            # training args are shared and persisted in the output_dir root
             torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
+            if isinstance(module, PeftModel) and self.args.save_peft_base_model:
+                base_model_path = os.path.abspath(os.path.join(output_dir, "base_model"))
+                module.peft_config['default'].base_model_name_or_path = base_model_path
+                logger.warning("Base model for PEFT objective %s set to %s", objective, base_model_path)
 
-            if hasattr(module, "save_pretrained") or hasattr(unwrap_model(module), "save_pretrained"):
-                # if the head module has "save_pretrained" method, it will be called for persistence
-                module.save_pretrained(output_module_path, use_diff=True)
-            else:
-                # otherwise, we persist only a raw pytorch module
-                torch.save(module.state_dict(), os.path.join(output_module_path, WEIGHTS_NAME))
-
+            self._save_module(module, output_module_path)
             logger.info(f"Model of objective {str(objective)} saved in {output_module_path}")
+
+    def _load_optimizer_and_scheduler(self, checkpoint: str) -> None:
+        # Customizations to support continued training
+
+        # If the training already State exists, it overrides newly-initialized TrainerState (initialized in HF.train())
+        possible_state_path = os.path.join(self.model.model_name_or_path, TRAINER_STATE_NAME)
+        if os.path.exists(possible_state_path):
+            self.state = TrainerState.load_from_json(possible_state_path)
+            logger.warning("Restoring training on global step %s", self.state.global_step)
+
+        # in case of continued training, optimizer exists on model.model_name_or_path
+        # if the optmizer.pt does not exist, the `super()._load_optimizer_and_scheduler` does not do anything
+        return super()._load_optimizer_and_scheduler(checkpoint=self.model.model_name_or_path)
