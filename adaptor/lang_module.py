@@ -1,13 +1,15 @@
 import logging
 import inspect
+import os
 from typing import List, Dict, Any, Optional
 
 import torch
+from peft import PeftConfig
 from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForSequenceClassification, \
     AutoModelForTokenClassification, AutoModelForSeq2SeqLM, AutoModelForCausalLM, \
     AutoModelForMaskedLM, AutoModelForQuestionAnswering
 
-from .utils import Head
+from .utils import Head, HEAD_TO_MODEL_CLS
 
 logger = logging.getLogger()
 
@@ -24,17 +26,43 @@ class LangModule(torch.nn.Module):
     """
 
     tokenizer: PreTrainedTokenizer
+    model_name_or_path: str
     trainable_models: torch.nn.ModuleDict
     heads_output_sizes: Dict[str, int] = {}
 
     def __init__(self, model_name_or_path: str) -> None:
         super().__init__()
         self.model_name_or_path = model_name_or_path
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+        self.tokenizer = self._find_and_load_tokenizer(model_name_or_path)
 
         # head_kwargs = head_kwargs if head_kwargs is not None else [{}] * len(head_types)
         # self._load_pretrained_with_heads(model_name_or_path, head_types, head_kwargs)
         self.trainable_models = torch.nn.ModuleDict()
+
+    @staticmethod
+    def _find_and_load_tokenizer(model_name_or_path) -> PreTrainedTokenizer:
+        try:
+            # New training
+            tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+            logger.info("Loaded tokenizer from %s", model_name_or_path)
+        except OSError:
+            # Continued training
+            # in Adaptor checkpoints, tokenizers are persisted in the respective objectives' subdirs
+            # Hence, here we also look for the tokenizer in the model_name_or_path's subdirs
+            root = model_name_or_path
+            # continued training
+            subdirs = [path for path in os.listdir(root)
+                       if os.path.isdir(os.path.join(root, path))]
+            subdirs_with_tokenizer = [os.path.join(root, subdir) for subdir in subdirs
+                                      if any(f.startswith("tokenizer") for f in os.listdir(os.path.join(root, subdir)))]
+            if not subdirs_with_tokenizer:
+                raise OSError("Could not find a tokenizer in any of the subdirectories %s "
+                              "of given model_name_or_path='%s'", subdirs, root)
+            tokenizer_dir = subdirs_with_tokenizer[0]
+
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir)
+            logger.info("Loaded tokenizer from %s", tokenizer_dir)
+        return tokenizer
 
     @staticmethod
     def load_head(model_name_or_path: str,
@@ -45,29 +73,38 @@ class LangModule(torch.nn.Module):
         :param model_name_or_path: base model identifier
         :param head_type: type of the requested head
         :param head_kwargs: additional initialization arguments, adjusting its default, or persisted config
-        :return: transformer with a gead of requested type
+        :return: transformer with a head of requested type or a new pytorch model
         """
+        try:
+            # trying to load first as a transformer model, and if it fails, as a peft model
+            BaseModelCls = HEAD_TO_MODEL_CLS[head_type]["full"]
+            try:
+                new_head = BaseModelCls.from_pretrained(model_name_or_path, **head_kwargs)
+            except OSError:
+                logger.warning("Loading model_name_or_path='%s' as full transformer failed. "
+                               "Attempting to load it as peft model.", model_name_or_path)
 
-        if head_type == Head.SEQ_CLASSIFICATION:
-            new_head = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, **head_kwargs)
-        elif head_type == Head.TOKEN_CLASSIFICATION:
-            new_head = AutoModelForTokenClassification.from_pretrained(model_name_or_path, **head_kwargs)
-        elif head_type == Head.SEQ2SEQ:
-            new_head = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path, **head_kwargs)
-        elif head_type == Head.CLM:
-            new_head = AutoModelForCausalLM.from_pretrained(model_name_or_path, **head_kwargs)
-        elif head_type == Head.MLM:
-            new_head = AutoModelForMaskedLM.from_pretrained(model_name_or_path, **head_kwargs)
-        elif head_type == Head.QA:
-            new_head = AutoModelForQuestionAnswering.from_pretrained(model_name_or_path, **head_kwargs)
-        else:
+                peft_model_config = PeftConfig.from_pretrained(model_name_or_path)
+                base_model_path = peft_model_config.base_model_name_or_path
+                base_model = BaseModelCls.from_pretrained(base_model_path)
+
+                ModelCls = HEAD_TO_MODEL_CLS[head_type]["peft"]
+                new_head = ModelCls.from_pretrained(base_model, model_name_or_path, **head_kwargs)
+        except KeyError:
+            # requested head type is not in our map
+            logger.warning("Model in %s is not a transformers model. "
+                           "Trying to load as a Pytorch model." % model_name_or_path)
             new_head = torch.load(model_name_or_path, **head_kwargs)
+        except ValueError:
+            # model type is recognized, but could not be loaded
+            raise ValueError("Could not load model from %s as a transformer or peft model.", model_name_or_path)
 
         return new_head
 
     def load_training_head(self,
                            head_type: Head,
                            objective_id: str,
+                           checkpoint_dir: Optional[str] = None,
                            head_kwargs: Optional[Dict[str, Any]] = None,
                            new_head: Optional[torch.nn.Module] = None) -> torch.nn.Module:
         """
@@ -75,18 +112,21 @@ class LangModule(torch.nn.Module):
         and registers new model into self.trainable_models[objective_id].
         :param head_type: if no `new_head` is given, a transformer of self.model_name_or_path
         with a head of `head_type` will be registered.
-        :param objective_id: key of the new_head model.
+        :param objective_id: key of the new_head model used to route data samples
+        :param checkpoint_dir: directory to objective's checkpoints. Overrides model_name_or_path in continued training
         :param head_kwargs: if transformer is automatically resolved, additional init args of the transformer,
         passed to AutoModelForXY.from_pretrained()
         :param new_head: if given, this would be a selected model to be registered.
-        :return:
+
+        :return: The module for a newly registered objective.
         """
         # manually-initialized head chosen for this objective will also be merged with other objectives and registered
         if head_kwargs is None:
             head_kwargs = {}
         if new_head is None:
-            new_head = self.load_head(self.model_name_or_path, head_type, head_kwargs)
-
+            new_head = self.load_head(self.model_name_or_path if checkpoint_dir is None else checkpoint_dir,
+                                      head_type,
+                                      head_kwargs)
         # this applies to the 2nd+ -added models: they adopt the shared parameters of the first lang_module
         if len(self.trainable_models) >= 1:
             unmatched_modules = self._partially_merge_models(list(self.trainable_models.values())[0], new_head)
@@ -121,8 +161,8 @@ class LangModule(torch.nn.Module):
                     # param present in the model to merge new_model into
                     new_model_param = getattr(new_model, new_param_key)
                     orig_model_param = getattr(orig_model, new_param_key)
-                    if orig_model_param.shape == new_model_param.shape and torch.all(
-                            orig_model_param == new_model_param):
+                    if (orig_model_param.shape == new_model_param.shape
+                            and torch.all(orig_model_param == new_model_param)):
                         setattr(new_model, new_param_key, orig_model_param)
                         assert id(getattr(orig_model, new_param_key)) == id(getattr(new_model, new_param_key))
                     else:

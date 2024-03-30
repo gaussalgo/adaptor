@@ -32,7 +32,8 @@ setup(
         "torch>=1.7",
         "transformers<=4.30.2",  # TODO upper-closed on 4.30.2: Problem with returning empty batches
         "sentencepiece",
-        "accelerate>=0.20.1"
+        "accelerate>=0.20.1",
+        "peft==0.9.0"
     ],
     test_require=[
         "pytest"

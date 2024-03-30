@@ -3,7 +3,9 @@ from enum import Enum
 from typing import Dict, Iterable, Iterator, Optional
 
 import torch
+import peft
 from torch.utils.data import IterableDataset
+import transformers
 from transformers import BatchEncoding, TrainingArguments
 
 
@@ -25,6 +27,22 @@ class StoppingStrategy(Enum):
     ALL_OBJECTIVES_NUM_STEPS = 5
     NUM_STEPS_TOTAL = 6
     MANUAL = 7
+
+
+HEAD_TO_MODEL_CLS = {
+    Head.SEQ_CLASSIFICATION: {"full": transformers.AutoModelForSequenceClassification,
+                              "peft": peft.PeftModelForSequenceClassification},
+    Head.TOKEN_CLASSIFICATION: {"full": transformers.AutoModelForTokenClassification,
+                                "peft": peft.PeftModelForTokenClassification},
+    Head.SEQ2SEQ: {"full": transformers.AutoModelForSeq2SeqLM,
+                   "peft": peft.PeftModelForSeq2SeqLM},
+    Head.CLM: {"full": transformers.AutoModelForCausalLM,
+               "peft": peft.PeftModelForCausalLM},
+    Head.MLM: {"full": transformers.AutoModelForMaskedLM,
+               "peft": NotImplemented},
+    Head.QA: {"full": transformers.AutoModelForQuestionAnswering,
+              "peft": peft.PeftModelForQuestionAnswering}
+}
 
 
 class AdaptationDataset(IterableDataset, abc.ABC):
@@ -64,12 +82,14 @@ class AdaptationDataset(IterableDataset, abc.ABC):
 class TransformerAdaptationDataset(AdaptationDataset):
     def __init__(self,
                  batch_encoding_params: Iterable[Dict[str, torch.LongTensor]],
-                 length: Optional[int] = None):
+                 length: Optional[int] = None,
+                 offset: int = 0):
         """
         :param batch_encoding_params: Arguments to be passed to BatchEncoding (input_ids, attention_mask, labels)
         """
         super().__init__(length)
         self.batch_encoding_params = batch_encoding_params
+        self.offset = offset
 
     def __iter__(self) -> Iterator[Dict[str, torch.LongTensor]]:
         """
@@ -80,6 +100,10 @@ class TransformerAdaptationDataset(AdaptationDataset):
         worker_info = torch.utils.data.get_worker_info()
 
         for i, encoded_sample in enumerate(self.batch_encoding_params):
+            # fast-forward the self.offset steps in continued training
+            if i < self.offset:
+                continue
+
             if worker_info is not None:
                 # multi-gpu DataParallel
                 if (i - worker_info.id) % worker_info.num_workers == 0:
@@ -106,11 +130,20 @@ class AdaptationArguments(TrainingArguments):
                  stopping_strategy: StoppingStrategy,
                  stopping_patience: Optional[int] = 10,
                  also_log_converged_objectives: Optional[bool] = True,
+                 save_peft_base_model: bool = False,
                  **kwargs):
+        """
+        Adds Adaptor-specific arguments to standard HF's TrainingArguments
+        :param stopping_strategy: A strategy to decide whether to stop training, based on the states of all objectives
+        :param stopping_patience: How many global steps to wait before stopping the training
+        :param also_log_converged_objectives: Whether to perform evaluations also for already stopped objectives
+        :param save_peft_base_model: Whether to also persist the base model when training some objective(s) with PEFT.
+        """
         # novel arguments, w.r.t. original TrainingArguments
         self.stopping_strategy = stopping_strategy
         self.stopping_patience = stopping_patience
         self.log_converged_objectives = also_log_converged_objectives
+        self.save_peft_base_model = save_peft_base_model
 
         # adjustments of the defaults expected by Scheduler
         unexpected_adjusted_args = [arg for arg in kwargs.keys() if arg in self.fixed_adaptation_args.keys()]
