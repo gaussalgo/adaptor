@@ -12,7 +12,7 @@ from transformers.trainer import TRAINER_STATE_NAME
 
 from .lang_module import LangModule
 from .schedules import Schedule
-from .utils import AdaptationArguments
+from .utils import AdaptationArguments, SavingStrategy
 
 logger = logging.getLogger()
 
@@ -29,6 +29,7 @@ class Adapter(Trainer):
 
     permitted_args = ["args", "tokenizer", "callbacks", "optimizers"]
     eval_metrics_prefix = "eval"
+    args: AdaptationArguments
 
     def __init__(self, lang_module: LangModule, schedule: Schedule, args: AdaptationArguments, **kwargs):
         """
@@ -138,6 +139,11 @@ class Adapter(Trainer):
         for objective_id in self.schedule.objectives["train"].keys():
             module = self.model.trainable_models[str(objective_id)]
             objective = self.schedule.objectives["train"][int(objective_id)]
+            if (self.args.saving_strategy == SavingStrategy.FINISHED_OBJECTIVES
+                    and self.objective not in self.schedule.converged_objectives):
+                logger.warning("Not saving model for %s as SavingStrategy is set to FINISHED_OBJECTIVES.", objective)
+                continue
+
             output_module_path = os.path.join(output_dir, str(objective))
 
             # if the objective of this id was already persisted, we'll index the configs of the next ones
@@ -154,6 +160,10 @@ class Adapter(Trainer):
 
             self._save_module(module, output_module_path)
             logger.info(f"Model of objective {str(objective)} saved in {output_module_path}")
+            if self.args.saving_strategy == SavingStrategy.FIRST_OBJECTIVE:
+                logger.warning("Skipping other objectives from saving as the chosen SavingStrategy is FIRST_OBJECTIVE.")
+                break
+
 
     def _load_optimizer_and_scheduler(self, checkpoint: str) -> None:
         # Customizations to support continued training

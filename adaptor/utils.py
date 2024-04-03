@@ -29,6 +29,12 @@ class StoppingStrategy(Enum):
     MANUAL = 7
 
 
+class SavingStrategy(Enum):
+    ALL_OBJECTIVES = 1
+    FIRST_OBJECTIVE = 2
+    FINISHED_OBJECTIVES = 3
+
+
 HEAD_TO_MODEL_CLS = {
     Head.SEQ_CLASSIFICATION: {"full": transformers.AutoModelForSequenceClassification,
                               "peft": peft.PeftModelForSequenceClassification},
@@ -129,6 +135,7 @@ class AdaptationArguments(TrainingArguments):
     def __init__(self,
                  stopping_strategy: StoppingStrategy,
                  stopping_patience: Optional[int] = 10,
+                 saving_strategy: SavingStrategy = SavingStrategy.ALL_OBJECTIVES,
                  also_log_converged_objectives: Optional[bool] = True,
                  save_peft_base_model: bool = False,
                  **kwargs):
@@ -136,12 +143,14 @@ class AdaptationArguments(TrainingArguments):
         Adds Adaptor-specific arguments to standard HF's TrainingArguments
         :param stopping_strategy: A strategy to decide whether to stop training, based on the states of all objectives
         :param stopping_patience: How many global steps to wait before stopping the training
+        :param saving_strategy: A strategy to choose the objectives for which we persist the models in checkpoints.
         :param also_log_converged_objectives: Whether to perform evaluations also for already stopped objectives
         :param save_peft_base_model: Whether to also persist the base model when training some objective(s) with PEFT.
         """
         # novel arguments, w.r.t. original TrainingArguments
         self.stopping_strategy = stopping_strategy
         self.stopping_patience = stopping_patience
+        self.saving_strategy = saving_strategy
         self.log_converged_objectives = also_log_converged_objectives
         self.save_peft_base_model = save_peft_base_model
 
