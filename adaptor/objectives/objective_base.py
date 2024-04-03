@@ -359,7 +359,8 @@ class Objective(abc.ABC):
 
         # Support for continued training:
         # if this is a first iteration, fast-forward data iteration to the self.offset_steps
-        dataset_samples_offset = self.data_iteration_offset % self.dataset_length[split] if self.epoch == 1 else 0
+        should_offset_dataset = (split == "train" and self.epoch == 1)
+        dataset_samples_offset = self.data_iteration_offset % self.dataset_length[split] if should_offset_dataset else 0
         # adjust the current epoch accordingly
         self.epoch = (self.data_iteration_offset // self.dataset_length[split]) + 1
         # do not apply the offset again in the next epochs
