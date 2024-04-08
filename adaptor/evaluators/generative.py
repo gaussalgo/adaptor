@@ -67,11 +67,6 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
         :param tokenizer: a tokenizer corresponding to a model. If applicable, used to resolve special language_ids.
         """
 
-        assert hasattr(model, "generate"), "If Evaluator(use_generate=True), " \
-                                           "evaluated model must have its generate() method."
-        if hasattr(tokenizer, "lang_code_to_id") and not any("token_id" in k for k in self.generation_kwargs):
-            logger.warning("Tokenizer of %s has a `lang_code_to_id` attribute, but no `*token_id` was used in "
-                           "generation_kwargs. Make sure to check the model docs on how to generate with this model.")
 
         return self._autoregressive_predict_one(inputs_batch["input_ids"], inputs_batch["attention_mask"],
                                                 model, self.generation_kwargs)
@@ -95,6 +90,14 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
         """
         expected_str = []
         actual_str = []
+
+        if self.use_generate:
+            assert hasattr(model, "generate"), "If Evaluator(use_generate=True), " \
+                                               "the evaluated model must have implement a generate() method."
+
+            if hasattr(tokenizer, "lang_code_to_id") and not any("token_id" in k for k, v in self.generation_kwargs):
+                logger.warning("Your tokenizer has a `lang_code_to_id` attribute, but no `*token_id` was used in "
+                               "generation_kwargs. Be sure to check the model docs on how to generate with this model.")
 
         for batch in dataset:
             with torch.no_grad():
@@ -246,7 +249,7 @@ class JS_Divergence(GenerativeEvaluator):
         probs_joined = [(prob_r + prob_m) / 2 for prob_r, prob_m in zip(probs_real, probs_model)]
 
         return (self.KL_divergence(probs_real, probs_joined) + self.KL_divergence(probs_model, probs_joined)) / \
-               (2 * np.log2(base))
+            (2 * np.log2(base))
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
         # we use PRISM for paraphrase evaluation by default
