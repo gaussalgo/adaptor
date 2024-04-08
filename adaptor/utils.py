@@ -57,7 +57,9 @@ class AdaptationDataset(IterableDataset, abc.ABC):
     """
 
     def __init__(self, length: Optional[int] = None):
-        self.length = length
+        worker_info = torch.utils.data.get_worker_info()
+
+        self.length = length // worker_info.num_workers
 
     def __getitem__(self, index: int) -> BatchEncoding:
         raise ValueError("We shouldn't ever get here?")
