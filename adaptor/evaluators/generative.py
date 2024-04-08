@@ -11,7 +11,6 @@ from sacrebleu import corpus_bleu
 from transformers import PreTrainedTokenizer, BatchEncoding
 
 from .evaluator_base import EvaluatorBase
-from .prism import Prism
 from ..utils import Head, AdaptationDataset
 
 logger = logging.getLogger()
@@ -191,6 +190,7 @@ class PRISM(GenerativeEvaluator):
                  probability: Optional[bool] = False,
                  model_dir: str = "prism/model_dir",
                  **kwargs):
+        from .prism import Prism
         # language must be set, see prism.py: MODELS['langs'] for a list of supported langs
         super().__init__(**kwargs)
         self.probability = probability
@@ -249,7 +249,7 @@ class JS_Divergence(GenerativeEvaluator):
         probs_joined = [(prob_r + prob_m) / 2 for prob_r, prob_m in zip(probs_real, probs_model)]
 
         return (self.KL_divergence(probs_real, probs_joined) + self.KL_divergence(probs_model, probs_joined)) / \
-            (2 * np.log2(base))
+               (2 * np.log2(base))
 
     def evaluate_str(self, expected_list: Sequence[str], actual_list: Sequence[str]) -> float:
         # we use PRISM for paraphrase evaluation by default
