@@ -469,7 +469,11 @@ class Objective(abc.ABC):
         # Support for continued training:
         checkpoint_dir = None
         possible_checkpoint_path = os.path.join(lang_module.model_name_or_path, str(self))
-        if os.path.exists(possible_checkpoint_path):
+        if other_objective is not None:
+            logger.warning("Objective %s will use %s head of %s objective",
+                           self, self.compatible_head.name, other_objective)
+            preloaded_module = other_objective.compatible_head_model
+        elif os.path.exists(possible_checkpoint_path):
             logger.warning("Reloading objective %s's module from checkpoint %s", str(self), possible_checkpoint_path)
             checkpoint_dir = possible_checkpoint_path
 
@@ -478,11 +482,9 @@ class Objective(abc.ABC):
             trainer_state = TrainerState.load_from_json(os.path.join(lang_module.model_name_or_path,
                                                                      "trainer_state.json"))
             self.data_iteration_offset = trainer_state.global_step
-
-        elif other_objective is not None:
-            logger.warning("Objective %s will use %s head of %s objective",
-                           self, self.compatible_head.name, other_objective)
-            preloaded_module = other_objective.compatible_head_model
+        else:
+            logger.warning("No checkpoint found on %s. Attempting to load a model from '%s'.",
+                           possible_checkpoint_path, lang_module.model_name_or_path)
 
         return lang_module.load_training_head(self.compatible_head,
                                               str(id(self)),
