@@ -1,12 +1,17 @@
 import abc
+import logging
 from enum import Enum
 from typing import Dict, Iterable, Iterator, Optional
+import os
 
 import torch
 import peft
 from torch.utils.data import IterableDataset
 import transformers
 from transformers import BatchEncoding, TrainingArguments
+
+
+logger = logging.getLogger()
 
 
 class Head(Enum):
@@ -57,9 +62,12 @@ class AdaptationDataset(IterableDataset, abc.ABC):
     """
 
     def __init__(self, length: Optional[int] = None):
-        worker_info = torch.utils.data.get_worker_info()
-
-        self.length = length // worker_info.num_workers
+        self.world_size = int(os.environ.get("LOCAL_WORLD_SIZE", 1))
+        if self.world_size > 1:
+            logger.warning("World size for data sampling: %s" % self.world_size)
+            self.length = length // self.world_size
+        else:
+            self.length = length
 
     def __getitem__(self, index: int) -> BatchEncoding:
         raise ValueError("We shouldn't ever get here?")
@@ -112,9 +120,9 @@ class TransformerAdaptationDataset(AdaptationDataset):
             if i < self.offset:
                 continue
 
-            if worker_info is not None:
+            if self.world_size > 1 and worker_info is not None:
                 # multi-gpu DataParallel
-                if (i - worker_info.id) % worker_info.num_workers == 0:
+                if (i - worker_info.id) % world_size == 0:
                     # sample modulo number of all workers match this worker rank
                     yield encoded_sample
             else:

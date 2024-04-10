@@ -97,7 +97,7 @@ class LangModule(torch.nn.Module):
             new_head = torch.load(model_name_or_path, **head_kwargs)
         except ValueError:
             # model type is recognized, but could not be loaded
-            raise ValueError("Could not load model from %s as a transformer or peft model.", model_name_or_path)
+            raise ValueError("Could not load model from %s as a transformer or peft model." % model_name_or_path)
 
         return new_head
 
