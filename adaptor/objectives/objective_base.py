@@ -41,6 +41,7 @@ class Objective(abc.ABC):
     data_iteration_offset: int
 
     num_samples_per_log: Dict[str, int]
+    num_samples_to_prefetch: int = 10
 
     def __init__(self,
                  lang_module: LangModule,
@@ -57,6 +58,7 @@ class Objective(abc.ABC):
                  max_samples_per_log: int = 1000,
                  max_samples_per_eval_log: int = 10000,
                  data_iteration_offset: int = 0,
+                 prefetch_in_parallel_thread: bool = True,
                  remember_last_input: Optional[bool] = False):
         """
         Shared initialisation logic of every Objective.
@@ -99,6 +101,7 @@ class Objective(abc.ABC):
         self.evaluations_history = {"train": {}, "eval": {}}
         self.max_samples_per_log = {"train": max_samples_per_log, "eval": max_samples_per_eval_log}
         self.data_iteration_offset = 0
+        self.prefetch_in_parallel_thread = prefetch_in_parallel_thread
 
         self.compatible_head_model = self.register_compatible_head_model(lang_module,
                                                                          share_other_objective_head,
@@ -282,6 +285,7 @@ class Objective(abc.ABC):
         self.num_steps += 1
 
         if self.progressbar[split] is not None:
+            self.progressbar[split].update(1)
             self.progressbar[split].set_postfix(refresh=False, split=split, loss=loss.item(), epoch=self.epoch)
 
         return loss * self.loss_weight
@@ -301,7 +305,7 @@ class Objective(abc.ABC):
 
     def get_dataset(self,
                     split: str,
-                    objective_i: int,
+                    objective_i: Optional[int] = 0,
                     device: Optional[Union[str, torch.device]] = None,
                     add_oid: bool = True,
                     is_training_dataset: bool = True,
@@ -309,7 +313,7 @@ class Objective(abc.ABC):
         """
         Default logic for wrapping the inputs iterator into torch.IterableDataset, used in Trainer.train_dataloaer.
         :param split: A split of the retrieved dataset. `train` or `eval`.
-        :param objective_i: Rank of this objective in schedule. Used only to properly set up progress bar.
+        :param objective_i: Objective's rank used only to properly set up parallel progress bars.
         :param device: Device to transfer this data set to.
         :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
         :param is_training_dataset: Whether this dataset is used for training -> if to update the epochs counter.
@@ -357,6 +361,10 @@ class Objective(abc.ABC):
         if self.remember_last_input:
             device_inputs_iter = map(_remember_input, device_inputs_iter)
 
+        if self.prefetch_in_parallel_thread:
+            from prefetch_generator import BackgroundGenerator
+            device_inputs_iter = BackgroundGenerator(device_inputs_iter, max_prefetch=self.num_samples_to_prefetch)
+
         # Support for continued training:
         # if this is a first iteration, fast-forward data iteration to the self.offset_steps
         should_offset_dataset = (split == "train" and self.epoch == 1)
@@ -375,7 +383,7 @@ class Objective(abc.ABC):
                                              leave=True)
             self.progressbar[split].set_postfix(refresh=False, split=split, epoch=self.epoch, loss=-1)
             # assign a hook to the iterator, to update the progressbar on every yielded sample
-            device_inputs_iter = map(_update_pbar, device_inputs_iter)
+            # device_inputs_iter = map(_update_pbar, device_inputs_iter)
         else:
             # we do not update loss, if no progress bar is pertained
             self.progressbar[split] = None
