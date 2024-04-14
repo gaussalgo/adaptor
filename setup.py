@@ -33,7 +33,8 @@ setup(
         "transformers<=4.30.2",  # TODO upper-closed on 4.30.2: Problem with returning empty batches
         "sentencepiece",
         "accelerate>=0.20.1",
-        "peft==0.9.0"
+        "peft==0.9.0",
+        "prefetch-generator>=1.0.3"
     ],
     test_require=[
         "pytest"
