@@ -47,6 +47,12 @@ class Adapter(Trainer):
 
         orig_callbacks = [] if "callbacks" not in kwargs else kwargs.pop("callbacks")
 
+        all_objectives_ids = list(map(str, self.schedule.objectives["train"].values()))
+        if len(set(all_objectives_ids)) < len(all_objectives_ids):
+            duplicates = [identifier for identifier in all_objectives_ids if all_objectives_ids.count(identifier) > 1]
+            raise ValueError("These objectives have identical identifiers: %s; This would cause "
+                             "incorrect persistence of checkpoints for your objectives." % set(duplicates))
+
         super().__init__(model=lang_module,
                          args=args,
                          train_dataset=self.schedule.iterable_dataset(split="train"),
