@@ -58,7 +58,7 @@ class Objective(abc.ABC):
                  max_samples_per_log: int = 1000,
                  max_samples_per_eval_log: int = 10000,
                  data_iteration_offset: int = 0,
-                 prefetch_in_parallel_thread: bool = True,
+                 prefetch_in_parallel_thread: bool = False,
                  remember_last_input: Optional[bool] = False):
         """
         Shared initialisation logic of every Objective.
@@ -165,7 +165,7 @@ class Objective(abc.ABC):
                 with io.TextIOWrapper(io.BufferedReader(gzip.open(texts_or_path))) as f:
                     return sum(1 for _ in f)  # more efficient line count
             else:
-                with open(self.texts_path, "rb") as f:
+                with open(texts_or_path, "rb") as f:
                     return sum(1 for _ in f)  # more efficient line count
 
         elif isinstance(texts_or_path, list):

@@ -1,10 +1,9 @@
 import abc
-from typing import List, Optional, Iterable, Dict, Iterator, Callable, Any, Union
+from typing import List, Optional, Iterable, Dict, Iterator, Callable, Union
 
 import torch
 from transformers import DataCollatorForSeq2Seq, BatchEncoding
 
-from ..lang_module import LangModule
 from ..objectives.objective_base import SupervisedObjective, Objective
 from ..utils import Head
 
@@ -23,6 +22,18 @@ class SequentialMixin(Objective, abc.ABC):
         self.target_lang_id = target_lang_id
         super().__init__(*args, **kwargs)
 
+        if hasattr(self.tokenizer, "lang_code_to_id") and self.source_lang_id is not None:
+            assert self.source_lang_id in self.tokenizer.vocab, \
+                ("Objective %s's 'src_lang' is not in its tokenizer's vocabulary. "
+                 "This would cause wrong data encodings." % self.source_lang_id)
+            self.tokenizer.src_lang = self.source_lang_id
+
+        if hasattr(self.tokenizer, "lang_code_to_id") and self.target_lang_id is not None:
+            assert self.target_lang_id in self.tokenizer.vocab, \
+                ("Objective %s's 'tgt_lang' is not in its tokenizer's vocabulary. "
+                 "This would cause wrong data encodings." % self.tokenizer.tgt_lang)
+            self.tokenizer.tgt_lang = self.target_lang_id
+
     def _get_seq2seq_collated_iterator(self,
                                        source_texts: Iterable[str],
                                        target_texts: Iterable[str]) -> Iterator[BatchEncoding]:
@@ -37,13 +48,9 @@ class SequentialMixin(Objective, abc.ABC):
         for source_text, target_text in zip(source_texts, target_texts):
             self.tokenizer.src_lang = self.source_lang_id
             self.tokenizer.tgt_lang = self.target_lang_id
-            sample_features = self.tokenizer(source_text, truncation=True)
+            sample_features = dict(self.tokenizer(source_text, text_target=target_text, truncation=True))
 
-            with self.tokenizer.as_target_tokenizer():
-                sample_targets = self.tokenizer(target_text, truncation=True)
-            features_batch.append({"input_ids": sample_features.input_ids,
-                                   "attention_mask": sample_features.attention_mask,
-                                   "labels": sample_targets.input_ids})
+            features_batch.append(sample_features)
             if len(features_batch) == self.batch_size:
                 yield self.collator(features_batch)
                 features_batch = []
