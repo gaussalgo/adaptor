@@ -1,15 +1,14 @@
-import logging
 import inspect
+import logging
 import os
+from copy import deepcopy
 from typing import List, Dict, Any, Optional
 
 import torch
 from peft import PeftConfig
-from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForSequenceClassification, \
-    AutoModelForTokenClassification, AutoModelForSeq2SeqLM, AutoModelForCausalLM, \
-    AutoModelForMaskedLM, AutoModelForQuestionAnswering
+from transformers import PreTrainedTokenizer, AutoTokenizer
 
-from .utils import Head, HEAD_TO_MODEL_CLS
+from .utils import Head, HEAD_TO_MODEL_CLS, PEFT_BASE_MODEL_CHECKPOINT_SUBDIR
 
 logger = logging.getLogger()
 
@@ -28,6 +27,7 @@ class LangModule(torch.nn.Module):
     tokenizer: PreTrainedTokenizer
     model_name_or_path: str
     trainable_models: torch.nn.ModuleDict
+    peft_base_model: Optional[torch.nn.Module]
     heads_output_sizes: Dict[str, int] = {}
 
     def __init__(self, model_name_or_path: str) -> None:
@@ -38,6 +38,7 @@ class LangModule(torch.nn.Module):
         # head_kwargs = head_kwargs if head_kwargs is not None else [{}] * len(head_types)
         # self._load_pretrained_with_heads(model_name_or_path, head_types, head_kwargs)
         self.trainable_models = torch.nn.ModuleDict()
+        self.peft_base_model = None
 
     @staticmethod
     def _find_and_load_tokenizer(model_name_or_path) -> PreTrainedTokenizer:
@@ -64,32 +65,44 @@ class LangModule(torch.nn.Module):
             logger.info("Loaded tokenizer from %s", tokenizer_dir)
         return tokenizer
 
-    @staticmethod
-    def load_head(model_name_or_path: str,
+    def load_head(self,
+                  model_name_or_path: str,
                   head_type: Head,
-                  head_kwargs: Dict[str, Any]) -> torch.nn.Module:
+                  head_kwargs: Dict[str, Any],
+                  continued_training: bool) -> torch.nn.Module:
         """
         Returns transformers model with a head of the requested type.
         :param model_name_or_path: base model identifier
         :param head_type: type of the requested head
         :param head_kwargs: additional initialization arguments, adjusting its default, or persisted config
+        :param continued_training: Whether this is a reload of the model within continued training.
         :return: transformer with a head of requested type or a new pytorch model
         """
         try:
             # trying to load first as a transformer model, and if it fails, as a peft model
             BaseModelCls = HEAD_TO_MODEL_CLS[head_type]["full"]
             try:
+                # first trying to load as a full model
                 new_head = BaseModelCls.from_pretrained(model_name_or_path, **head_kwargs)
             except OSError:
+                # if that fails, tring to load as a PEFT model
                 logger.warning("Loading model_name_or_path='%s' as full transformer failed. "
                                "Attempting to load it as peft model.", model_name_or_path)
-
-                peft_model_config = PeftConfig.from_pretrained(model_name_or_path)
-                base_model_path = peft_model_config.base_model_name_or_path
-                base_model = BaseModelCls.from_pretrained(base_model_path)
+                # base model resolution
+                # we want to avoid reloading the base model separately for each lora module
+                if self.peft_base_model is None:
+                    if not continued_training:
+                        # in a fresh training, PEFT models define their base model in their config
+                        peft_model_config = PeftConfig.from_pretrained(model_name_or_path)
+                        base_model_path = peft_model_config.base_model_name_or_path
+                    else:
+                        # In PEFT training with adaptor, the base model is checkpointed in a pre-defined directory
+                        base_model_path = os.path.join(model_name_or_path, "..", PEFT_BASE_MODEL_CHECKPOINT_SUBDIR)
+                    logger.warning("Attempting to reload base model for peft objectives from %s", base_model_path)
+                    self.peft_base_model = BaseModelCls.from_pretrained(base_model_path)
 
                 ModelCls = HEAD_TO_MODEL_CLS[head_type]["peft"]
-                new_head = ModelCls.from_pretrained(base_model, model_name_or_path, **head_kwargs)
+                new_head = ModelCls.from_pretrained(deepcopy(self.peft_base_model), model_name_or_path, **head_kwargs)
         except KeyError:
             # requested head type is not in our map
             logger.warning("Model in %s is not a transformers model. "
@@ -126,7 +139,8 @@ class LangModule(torch.nn.Module):
         if new_head is None:
             new_head = self.load_head(self.model_name_or_path if checkpoint_dir is None else checkpoint_dir,
                                       head_type,
-                                      head_kwargs)
+                                      head_kwargs,
+                                      continued_training=checkpoint_dir is not None)
         # this applies to the 2nd+ -added models: they adopt the shared parameters of the first lang_module
         if len(self.trainable_models) >= 1:
             unmatched_modules = self._partially_merge_models(list(self.trainable_models.values())[0], new_head)
@@ -245,3 +259,6 @@ class LangModule(torch.nn.Module):
         for module_id, module in self.trainable_models.items():
             if hasattr(module, "gradient_checkpointing_enable"):
                 module.gradient_checkpointing_enable()
+
+    def finalize(self) -> None:
+        self.peft_base_model = None  # unset the shared base model to save memory
