@@ -43,6 +43,8 @@ class Objective(abc.ABC):
     num_samples_per_log: Dict[str, int]
     num_samples_to_prefetch: int = 10
 
+    peft_objective: bool
+
     def __init__(self,
                  lang_module: LangModule,
                  batch_size: int,
@@ -59,7 +61,8 @@ class Objective(abc.ABC):
                  max_samples_per_eval_log: int = 10000,
                  data_iteration_offset: int = 0,
                  prefetch_in_parallel_thread: bool = False,
-                 remember_last_input: Optional[bool] = False):
+                 remember_last_input: Optional[bool] = False,
+                 peft_objective: Optional[bool] = False):
         """
         Shared initialisation logic of every Objective.
         Registers a compatible model for this objective to given `lang_module`,
@@ -89,7 +92,9 @@ class Objective(abc.ABC):
         self.batch_size = batch_size
         self.tokenizer = lang_module.tokenizer
         self.given_id = objective_id
+        self.peft_objective = peft_objective
         self.loss_weight = loss_weight
+
         self.num_steps = 0
         self.remember_last_input = remember_last_input
         self.last_input = None
@@ -495,6 +500,7 @@ class Objective(abc.ABC):
                            possible_checkpoint_path, lang_module.model_name_or_path)
 
         return lang_module.load_training_head(self.compatible_head,
+                                              self.peft_objective,
                                               str(id(self)),
                                               checkpoint_dir,
                                               head_config,

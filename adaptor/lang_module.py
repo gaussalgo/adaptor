@@ -5,7 +5,7 @@ from copy import deepcopy
 from typing import List, Dict, Any, Optional
 
 import torch
-from peft import PeftConfig
+from peft import PeftConfig, get_peft_model
 from transformers import PreTrainedTokenizer, AutoTokenizer
 
 from .utils import Head, HEAD_TO_MODEL_CLS, PEFT_BASE_MODEL_CHECKPOINT_SUBDIR
@@ -68,6 +68,7 @@ class LangModule(torch.nn.Module):
     def load_head(self,
                   model_name_or_path: str,
                   head_type: Head,
+                  load_as_peft: bool,
                   head_kwargs: Dict[str, Any],
                   continued_training: bool) -> torch.nn.Module:
         """
@@ -81,28 +82,52 @@ class LangModule(torch.nn.Module):
         try:
             # trying to load first as a transformer model, and if it fails, as a peft model
             BaseModelCls = HEAD_TO_MODEL_CLS[head_type]["full"]
-            try:
-                # first trying to load as a full model
+            if not load_as_peft:
                 new_head = BaseModelCls.from_pretrained(model_name_or_path, **head_kwargs)
-            except OSError:
-                # if that fails, tring to load as a PEFT model
+            else:
+                PeftModelCls = HEAD_TO_MODEL_CLS[head_type]["peft"]
+                # if that fails, trying to load as a PEFT model
                 logger.warning("Loading model_name_or_path='%s' as full transformer failed. "
                                "Attempting to load it as peft model.", model_name_or_path)
                 # base model resolution
-                # we want to avoid reloading the base model separately for each lora module
-                if self.peft_base_model is None:
-                    if not continued_training:
-                        # in a fresh training, PEFT models define their base model in their config
+                # we avoid reloading the base model separately for each lora module
+
+                if continued_training:
+                    # In PEFT training with adaptor, the base model is checkpointed in a pre-defined directory
+                    base_model_path = os.path.join(model_name_or_path, "..", PEFT_BASE_MODEL_CHECKPOINT_SUBDIR)
+                    if self.peft_base_model is None:
+                        self.peft_base_model = BaseModelCls.from_pretrained(base_model_path)
+
+                    new_head = PeftModelCls.from_pretrained(deepcopy(self.peft_base_model), model_name_or_path,
+                                                            **head_kwargs)
+                    logger.warning("Reloaded existing PEFT module from %s with base model %s.",
+                                   model_name_or_path, base_model_path)
+                else:
+                    try:
+                        # first try loading as an already-trained PEFT model (=> it already has its PeftConfig)
+                        # if it does not, fall back to loading a brand new PEFT model
                         peft_model_config = PeftConfig.from_pretrained(model_name_or_path)
                         base_model_path = peft_model_config.base_model_name_or_path
-                    else:
-                        # In PEFT training with adaptor, the base model is checkpointed in a pre-defined directory
-                        base_model_path = os.path.join(model_name_or_path, "..", PEFT_BASE_MODEL_CHECKPOINT_SUBDIR)
-                    logger.warning("Attempting to reload base model for peft objectives from %s", base_model_path)
-                    self.peft_base_model = BaseModelCls.from_pretrained(base_model_path)
+                        if self.peft_base_model is None:
+                            self.peft_base_model = BaseModelCls.from_pretrained(base_model_path)
 
-                ModelCls = HEAD_TO_MODEL_CLS[head_type]["peft"]
-                new_head = ModelCls.from_pretrained(deepcopy(self.peft_base_model), model_name_or_path, **head_kwargs)
+                        new_head = PeftModelCls.from_pretrained(deepcopy(self.peft_base_model), model_name_or_path,
+                                                                **head_kwargs)
+                        logger.warning("Reloaded existing PEFT module from %s with base model %s.",
+                                       model_name_or_path, base_model_path)
+                    except ValueError:
+                        logger.warning("Initializing a new PEFT module.")
+                        # ValueError: Can't find 'adapter_config.json' at {model_name_or_path}
+                        # -> we initialize a new PEFT model from a full pre-trained transformer (simplest case)
+                        assert 'peft_config' in head_kwargs, \
+                            ("Initializing an objective with PEFT model requires to pass a 'peft_config' "
+                             "witin `objective_args_for_head_config`, e.g: "
+                             "`objective = Objective(objective_args_for_head_config={'peft_config': LoraConfig()}`."
+                             " See the docs on https://huggingface.co/docs/peft/main/en/package_reference/config")
+                        if self.peft_base_model is None:
+                            self.peft_base_model = BaseModelCls.from_pretrained(model_name_or_path)
+                        head_kwargs['peft_config'].base_model_name_or_path = model_name_or_path
+                        new_head = get_peft_model(deepcopy(self.peft_base_model), **head_kwargs)
         except KeyError:
             # requested head type is not in our map
             logger.warning("Model in %s is not a transformers model. "
@@ -116,6 +141,7 @@ class LangModule(torch.nn.Module):
 
     def load_training_head(self,
                            head_type: Head,
+                           load_as_peft: bool,
                            objective_id: str,
                            checkpoint_dir: Optional[str] = None,
                            head_kwargs: Optional[Dict[str, Any]] = None,
@@ -139,6 +165,7 @@ class LangModule(torch.nn.Module):
         if new_head is None:
             new_head = self.load_head(self.model_name_or_path if checkpoint_dir is None else checkpoint_dir,
                                       head_type,
+                                      load_as_peft,
                                       head_kwargs,
                                       continued_training=checkpoint_dir is not None)
         # this applies to the 2nd+ -added models: they adopt the shared parameters of the first lang_module
