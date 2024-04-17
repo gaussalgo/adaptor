@@ -12,7 +12,7 @@ from transformers.trainer import TRAINER_STATE_NAME
 
 from .lang_module import LangModule
 from .schedules import Schedule
-from .utils import AdaptationArguments, SavingStrategy
+from .utils import AdaptationArguments, SavingStrategy, PEFT_BASE_MODEL_CHECKPOINT_SUBDIR
 
 logger = logging.getLogger()
 
@@ -52,6 +52,7 @@ class Adapter(Trainer):
             duplicates = [identifier for identifier in all_objectives_ids if all_objectives_ids.count(identifier) > 1]
             raise ValueError("These objectives have identical identifiers: %s; This would cause "
                              "incorrect persistence of checkpoints for your objectives." % set(duplicates))
+        lang_module.finalize()
 
         super().__init__(model=lang_module,
                          args=args,
@@ -138,7 +139,7 @@ class Adapter(Trainer):
                 # we find cases where unload() does not return the base model on the first call
                 orig_model = orig_model.unload()
 
-            base_model_path = os.path.join(output_dir, "base_model")
+            base_model_path = os.path.join(output_dir, PEFT_BASE_MODEL_CHECKPOINT_SUBDIR)
             self._save_module(orig_model, base_model_path)
             logger.info(f"Base model for PEFT objectives saved in {base_model_path}")
 

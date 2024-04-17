@@ -55,6 +55,8 @@ HEAD_TO_MODEL_CLS = {
               "peft": peft.PeftModelForQuestionAnswering}
 }
 
+PEFT_BASE_MODEL_CHECKPOINT_SUBDIR = "base_model"
+
 
 class AdaptationDataset(IterableDataset, abc.ABC):
     """
