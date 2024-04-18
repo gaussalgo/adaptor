@@ -87,8 +87,7 @@ class LangModule(torch.nn.Module):
             else:
                 PeftModelCls = HEAD_TO_MODEL_CLS[head_type]["peft"]
                 # if that fails, trying to load as a PEFT model
-                logger.warning("Loading model_name_or_path='%s' as full transformer failed. "
-                               "Attempting to load it as peft model.", model_name_or_path)
+                logger.warning("Loading model_name_or_path='%s' as peft model.", model_name_or_path)
                 # base model resolution
                 # we avoid reloading the base model separately for each lora module
 
