@@ -58,7 +58,7 @@ class LangModule(torch.nn.Module):
                                       if any(f.startswith("tokenizer") for f in os.listdir(os.path.join(root, subdir)))]
             if not subdirs_with_tokenizer:
                 raise OSError("Could not find a tokenizer in any of the subdirectories %s "
-                              "of given model_name_or_path='%s'", subdirs, root)
+                              "of given model_name_or_path='%s'" % (subdirs, root))
             tokenizer_dir = subdirs_with_tokenizer[0]
 
             tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir)
