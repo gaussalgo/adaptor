@@ -121,7 +121,10 @@ class Adapter(Trainer):
 
     def save_model(self, output_dir: Optional[str] = None, **kwargs) -> None:
         # HF native reload compatibility
-        objectives_counter = {str(obj): 0 for obj in self.schedule.objectives["train"].values()}
+        all_objectives = set(itertools.chain(self.schedule.objectives["train"].values(),
+                                             self.schedule.objectives["eval"].values()))
+
+        objectives_counter = {str(obj): 0 for obj in all_objectives}
 
         os.makedirs(output_dir, exist_ok=True)
 
@@ -144,10 +147,8 @@ class Adapter(Trainer):
             self._save_module(orig_model, base_model_path)
             logger.info(f"Base model for PEFT objectives saved in {base_model_path}")
 
-        all_objectives = set(itertools.chain(self.schedule.objectives["train"].values(),
-                                             self.schedule.objectives["eval"].values()))
         for objective in all_objectives:
-            module = self.model.trainable_models[id(objective)]
+            module = objective.compatible_head_model
             if (self.args.saving_strategy == SavingStrategy.FINISHED_OBJECTIVES
                     and self.objective not in self.schedule.converged_objectives):
                 logger.warning("Not saving model for %s as SavingStrategy is set to FINISHED_OBJECTIVES.", objective)
