@@ -1,4 +1,5 @@
 import copy
+import itertools
 import logging
 import os
 from typing import List, Dict, Tuple, Union, Optional
@@ -125,8 +126,8 @@ class Adapter(Trainer):
         os.makedirs(output_dir, exist_ok=True)
 
         # also save the base model, if any of our objectives are peft models
-        if (self.args.save_peft_base_model and
-            any(isinstance(o.compatible_head_model, PeftModel) for o in self.schedule.objectives["train"].values())):
+        if (self.args.save_peft_base_model and any(
+                isinstance(o.compatible_head_model, PeftModel) for o in self.schedule.objectives["train"].values())):
             # For simplicity, we assume that base models for all pefts are the same
             # -- this might be violated only if the user passes custom model_head to Objective
             # and additionally creates a peft module on it.
@@ -143,9 +144,10 @@ class Adapter(Trainer):
             self._save_module(orig_model, base_model_path)
             logger.info(f"Base model for PEFT objectives saved in {base_model_path}")
 
-        for objective_id in self.schedule.objectives["train"].keys():
-            module = self.model.trainable_models[str(objective_id)]
-            objective = self.schedule.objectives["train"][int(objective_id)]
+        all_objectives = set(itertools.chain(self.schedule.objectives["train"].values(),
+                                             self.schedule.objectives["eval"].values()))
+        for objective in all_objectives:
+            module = self.model.trainable_models[id(objective)]
             if (self.args.saving_strategy == SavingStrategy.FINISHED_OBJECTIVES
                     and self.objective not in self.schedule.converged_objectives):
                 logger.warning("Not saving model for %s as SavingStrategy is set to FINISHED_OBJECTIVES.", objective)
@@ -170,7 +172,6 @@ class Adapter(Trainer):
             if self.args.saving_strategy == SavingStrategy.FIRST_OBJECTIVE:
                 logger.warning("Skipping other objectives from saving as the chosen SavingStrategy is FIRST_OBJECTIVE.")
                 break
-
 
     def _load_optimizer_and_scheduler(self, checkpoint: str) -> None:
         # Customizations to support continued training
