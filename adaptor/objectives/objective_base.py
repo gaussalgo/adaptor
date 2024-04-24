@@ -107,7 +107,7 @@ class Objective(abc.ABC):
         self.max_samples_per_log = {"train": max_samples_per_log, "eval": max_samples_per_eval_log}
         self.data_iteration_offset = 0
         self.prefetch_in_parallel_thread = prefetch_in_parallel_thread
-
+        # register_compatible_head_model also sets the dataset iterator in continued training
         self.compatible_head_model = self.register_compatible_head_model(lang_module,
                                                                          share_other_objective_head,
                                                                          objective_args_for_head_config,
@@ -382,13 +382,12 @@ class Objective(abc.ABC):
         if show_progressbar:
             # set up a new progressbar object
             self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
+                                             initial=dataset_samples_offset,
                                              desc=str(self),
                                              unit="batches",
                                              position=objective_i,
                                              leave=True)
             self.progressbar[split].set_postfix(refresh=False, split=split, epoch=self.epoch, loss=-1)
-            # assign a hook to the iterator, to update the progressbar on every yielded sample
-            # device_inputs_iter = map(_update_pbar, device_inputs_iter)
         else:
             # we do not update loss, if no progress bar is pertained
             self.progressbar[split] = None
@@ -494,6 +493,7 @@ class Objective(abc.ABC):
             from transformers import TrainerState
             trainer_state = TrainerState.load_from_json(os.path.join(lang_module.model_name_or_path,
                                                                      "trainer_state.json"))
+            logger.warning("Data iteration of %s will continue on a step %s.", self, trainer_state.global_step)
             self.data_iteration_offset = trainer_state.global_step
         else:
             logger.warning("No checkpoint found on %s. Attempting to load a model from '%s'.",
