@@ -184,5 +184,5 @@ class Adapter(Trainer):
             logger.warning("Restoring training on global step %s", self.state.global_step)
 
         # in case of continued training, optimizer exists on model.model_name_or_path
-        # if the optmizer.pt does not exist, the `super()._load_optimizer_and_scheduler` does not do anything
+        # if the optimizer.pt does not exist, the `super()._load_optimizer_and_scheduler` does not do anything
         return super()._load_optimizer_and_scheduler(checkpoint=self.model.model_name_or_path)
