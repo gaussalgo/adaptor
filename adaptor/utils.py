@@ -64,7 +64,7 @@ class AdaptationDataset(IterableDataset, abc.ABC):
     """
 
     def __init__(self, length: Optional[int] = None):
-        self.world_size = int(os.environ.get("LOCAL_WORLD_SIZE", 1))
+        self.world_size = int(os.environ.get("WORLD_SIZE", 1))
         if self.world_size > 1:
             logger.warning("World size for data sampling: %s" % self.world_size)
             self.length = length // self.world_size
