@@ -167,7 +167,7 @@ class Objective(abc.ABC):
             if texts_or_path.endswith('.gz'):
                 import io
                 import gzip
-                with io.TextIOWrapper(io.BufferedReader(gzip.open(texts_or_path))) as f:
+                with io.TextIOWrapper(io.BufferedReader(gzip.open(texts_or_path))) as f:  # type: ignore
                     return sum(1 for _ in f)  # more efficient line count
             else:
                 with open(texts_or_path, "rb") as f:

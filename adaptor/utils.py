@@ -87,7 +87,7 @@ class AdaptationDataset(IterableDataset, abc.ABC):
         if path.endswith(".gz"):
             import gzip
             import io
-            with io.TextIOWrapper(io.BufferedReader(gzip.open(path))) as file:
+            with io.TextIOWrapper(io.BufferedReader(gzip.open(path))) as file:  # type: ignore
                 for line in file:
                     yield line.strip()
         else:
@@ -124,7 +124,7 @@ class TransformerAdaptationDataset(AdaptationDataset):
 
             if self.world_size > 1 and worker_info is not None:
                 # multi-gpu DataParallel
-                if (i - worker_info.id) % world_size == 0:
+                if (i - worker_info.id) % self.world_size == 0:
                     # sample modulo number of all workers match this worker rank
                     yield encoded_sample
             else:

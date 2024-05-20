@@ -65,8 +65,6 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
         :param inputs_batch: a batch of inputs with `input_ids` and `attention_mask` attributes.
         :param tokenizer: a tokenizer corresponding to a model. If applicable, used to resolve special language_ids.
         """
-
-
         return self._autoregressive_predict_one(inputs_batch["input_ids"], inputs_batch["attention_mask"],
                                                 model, self.generation_kwargs)
 
