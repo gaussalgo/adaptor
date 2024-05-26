@@ -144,7 +144,8 @@ class LangModule(torch.nn.Module):
                            objective_id: str,
                            checkpoint_dir: Optional[str] = None,
                            head_kwargs: Optional[Dict[str, Any]] = None,
-                           new_head: Optional[torch.nn.Module] = None) -> torch.nn.Module:
+                           new_head: Optional[torch.nn.Module] = None,
+                           do_merge: bool = True) -> torch.nn.Module:
         """
         Registers a selected model to this LangModule, i.e. merges its weights with first one of self.trainable_models,
         and registers new model into self.trainable_models[objective_id].
@@ -155,6 +156,7 @@ class LangModule(torch.nn.Module):
         :param head_kwargs: if transformer is automatically resolved, additional init args of the transformer,
         passed to AutoModelForXY.from_pretrained()
         :param new_head: if given, this would be a selected model to be registered.
+        :param do_merge: Whether the newly-registered model should be merged with other objective(s) modules.
 
         :return: The module for a newly registered objective.
         """
@@ -168,7 +170,7 @@ class LangModule(torch.nn.Module):
                                       head_kwargs,
                                       continued_training=checkpoint_dir is not None)
         # this applies to the 2nd+ -added models: they adopt the shared parameters of the first lang_module
-        if len(self.trainable_models) >= 1:
+        if do_merge and len(self.trainable_models) >= 1:
             unmatched_modules = self._partially_merge_models(list(self.trainable_models.values())[0], new_head)
             # this can contain a deep stack of layers, hence in general, it can not be checked automatically
             logger.warning("These layers of the loaded %s were not merged: %s" % (head_type.name, unmatched_modules))

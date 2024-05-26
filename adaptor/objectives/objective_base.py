@@ -54,6 +54,7 @@ class Objective(abc.ABC):
                  val_evaluators: Sequence[EvaluatorBase] = (),
                  share_other_objective_head: Optional["Objective"] = None,
                  objective_module: Optional[torch.nn.Module] = None,
+                 merge_objective_module: bool = True,
                  objective_args_for_head_config: Dict[str, Any] = {},
                  objective_id: Optional[str] = "",
                  loss_weight: Optional[float] = 1,
@@ -77,6 +78,7 @@ class Objective(abc.ABC):
         :param val_evaluators: Evaluators to be called on every evaluation step on validation outputs.
         :param share_other_objective_head: If given, this objective will share module with other given objective.
         :param objective_module: If given, this module will be registered for this objective.
+        :param merge_objective_module: If to merge the newly initialized or passed objective's module with others.
         :param objective_args_for_head_config: Extra arguments that can be passed to .from_pretrained() on head init.
         :param objective_id: Identifier of this objective, used in logging and checkpoints persistence.
         Necessary, if you train with multiple objectives of the same type, otherwise they might override each other.
@@ -111,7 +113,8 @@ class Objective(abc.ABC):
         self.compatible_head_model = self.register_compatible_head_model(lang_module,
                                                                          share_other_objective_head,
                                                                          objective_args_for_head_config,
-                                                                         objective_module)
+                                                                         objective_module,
+                                                                         merge_objective_module)
         if data_iteration_offset:  # can override obtained trainer_state["global_step"] in continued training
             self.data_iteration_offset = data_iteration_offset
         self.progressbar = {}
@@ -322,6 +325,7 @@ class Objective(abc.ABC):
         :param device: Device to transfer this data set to.
         :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
         :param is_training_dataset: Whether this dataset is used for training -> if to update the epochs counter.
+                                    Note that training dataset can also be iterated outside main training loop.
         :param show_progressbar: Whether to maintain a dataset iterator progress bar for this objective.
 
         :return: TransformerAdaptationDataset wrapping a data set of this objective.
@@ -371,8 +375,8 @@ class Objective(abc.ABC):
             device_inputs_iter = BackgroundGenerator(device_inputs_iter, max_prefetch=self.num_samples_to_prefetch)
 
         # Support for continued training:
-        # if this is a first iteration, fast-forward data iteration to the self.offset_steps
-        should_offset_dataset = (split == "train" and self.epoch == 1)
+        # if nonempty dataset AND this is a first train iteration, fast-forward data iteration to the self.offset_steps
+        should_offset_dataset = self.dataset_length[split] and (split == "train" and self.epoch == 1)
         dataset_samples_offset = self.data_iteration_offset % self.dataset_length[split] if should_offset_dataset else 0
         # adjust the current epoch accordingly
         self.epoch = (self.data_iteration_offset // self.dataset_length[split]) + 1
@@ -462,7 +466,8 @@ class Objective(abc.ABC):
                                        lang_module: LangModule,
                                        other_objective: Optional["Objective"] = None,
                                        objective_args_for_head_config: Optional[Dict[str, Any]] = None,
-                                       preloaded_module: Optional[torch.nn.Module] = None) -> torch.nn.Module:
+                                       preloaded_module: Optional[torch.nn.Module] = None,
+                                       do_merge: bool = True) -> torch.nn.Module:
         """
         Resolves a model of this objective in given lang_module. Either requests LangModule to provide model with
         self.compatible_head, or asks to register custom model (if `preloaded_module` is given).
@@ -485,6 +490,8 @@ class Objective(abc.ABC):
             logger.warning("Objective %s will use %s head of %s objective",
                            self, self.compatible_head.name, other_objective)
             preloaded_module = other_objective.compatible_head_model
+        elif preloaded_module is not None:
+            logger.warning("Objective %s will use the pre-defined model given in `objective_module` parameter.", self)
         elif os.path.exists(possible_checkpoint_path):
             logger.warning("Reloading objective %s's module from checkpoint %s", str(self), possible_checkpoint_path)
             checkpoint_dir = possible_checkpoint_path
@@ -504,7 +511,8 @@ class Objective(abc.ABC):
                                               str(id(self)),
                                               checkpoint_dir,
                                               head_config,
-                                              preloaded_module)
+                                              preloaded_module,
+                                              do_merge)
 
     def __str__(self) -> str:
         """
@@ -586,7 +594,8 @@ class SupervisedObjective(Objective, abc.ABC):
     def register_compatible_head_model(self, lang_module: LangModule,
                                        other_objective: Optional["Objective"] = None,
                                        objective_args_for_head_config: Optional[Dict[str, Any]] = None,
-                                       preloaded_module: Optional[torch.nn.Module] = None) -> torch.nn.Module:
+                                       preloaded_module: Optional[torch.nn.Module] = None,
+                                       merge_objective_module: bool = True) -> torch.nn.Module:
         """
         Additionally adds labels into a configuration of this objective's model in lang_module.
         Refer further to the documentation of the superclass.
@@ -612,8 +621,8 @@ class SupervisedObjective(Objective, abc.ABC):
                                               "id2label": {v: k for k, v in self.labels_map.items()},
                                               **objective_args_for_head_config}
 
-        return super().register_compatible_head_model(lang_module, other_objective,
-                                                      objective_args_for_head_config, preloaded_module)
+        return super().register_compatible_head_model(lang_module, other_objective, objective_args_for_head_config,
+                                                      preloaded_module, merge_objective_module)
 
     def _get_inputs_iterator(self, split: str) -> Iterator[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
         """
