@@ -60,7 +60,8 @@ class Distillation(Objective, abc.ABC):
                                        lang_module: LangModule,
                                        other_objective: Optional["Objective"] = None,
                                        objective_args_for_head_config: Optional[Dict[str, Any]] = None,
-                                       preloaded_module: Optional[torch.nn.Module] = None) -> torch.nn.Module:
+                                       preloaded_module: Optional[torch.nn.Module] = None,
+                                       merge_objective_module: bool = True) -> torch.nn.Module:
         if self.add_hidden_states_loss:
             # if the loss is computed also from the hidden_states, we make sure they are actually requested
             if objective_args_for_head_config is not None:
@@ -71,7 +72,8 @@ class Distillation(Objective, abc.ABC):
         return super().register_compatible_head_model(lang_module,
                                                       other_objective,
                                                       objective_args_for_head_config,
-                                                      preloaded_module)
+                                                      preloaded_module,
+                                                      merge_objective_module)
 
     def _loss_for_hidden_states(self,
                                 student_hidden: Tuple[torch.FloatTensor],
