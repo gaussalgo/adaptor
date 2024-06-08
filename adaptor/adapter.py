@@ -172,7 +172,7 @@ class Adapter(Trainer):
                 logger.warning("Base model for PEFT objective %s set to %s", objective, base_model_path)
 
             self._save_module(module, output_module_path)
-            logger.info(f"Model of objective {str(objective)} saved in {output_module_path}")
+            logger.warning(f"Model of objective {str(objective)} saved in {output_module_path}")
             if self.args.saving_strategy == SavingStrategy.FIRST_OBJECTIVE:
                 logger.warning("Skipping other objectives from saving as the chosen SavingStrategy is FIRST_OBJECTIVE.")
                 break
