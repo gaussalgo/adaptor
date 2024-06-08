@@ -44,6 +44,7 @@ class Objective(abc.ABC):
     num_samples_to_prefetch: int = 10
 
     peft_objective: bool
+    save_objective_module: bool
 
     def __init__(self,
                  lang_module: LangModule,
@@ -55,6 +56,7 @@ class Objective(abc.ABC):
                  share_other_objective_head: Optional["Objective"] = None,
                  objective_module: Optional[torch.nn.Module] = None,
                  merge_objective_module: bool = True,
+                 save_objective_module: bool = True,
                  objective_args_for_head_config: Dict[str, Any] = {},
                  objective_id: Optional[str] = "",
                  loss_weight: Optional[float] = 1,
@@ -79,6 +81,7 @@ class Objective(abc.ABC):
         :param share_other_objective_head: If given, this objective will share module with other given objective.
         :param objective_module: If given, this module will be registered for this objective.
         :param merge_objective_module: If to merge the newly initialized or passed objective's module with others.
+        :param save_objective_module: If to separately save the module of this objective on calling save_model.
         :param objective_args_for_head_config: Extra arguments that can be passed to .from_pretrained() on head init.
         :param objective_id: Identifier of this objective, used in logging and checkpoints persistence.
         Necessary, if you train with multiple objectives of the same type, otherwise they might override each other.
@@ -115,6 +118,7 @@ class Objective(abc.ABC):
                                                                          objective_args_for_head_config,
                                                                          objective_module,
                                                                          merge_objective_module)
+        self.save_objective_module = save_objective_module
         if data_iteration_offset:  # can override obtained trainer_state["global_step"] in continued training
             self.data_iteration_offset = data_iteration_offset
         self.progressbar = {}
