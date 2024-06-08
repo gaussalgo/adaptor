@@ -148,6 +148,9 @@ class Adapter(Trainer):
             logger.info(f"Base model for PEFT objectives saved in {base_model_path}")
 
         for objective in all_objectives:
+            if not objective.save_objective_module:
+                logger.warning("Skipping objective %s from saving objectives' modules.", objective)
+                continue
             module = objective.compatible_head_model
             if (self.args.saving_strategy == SavingStrategy.FINISHED_OBJECTIVES
                     and self.objective not in self.schedule.converged_objectives):
