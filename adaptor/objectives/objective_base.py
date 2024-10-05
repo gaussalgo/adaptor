@@ -433,7 +433,10 @@ class UnsupervisedObjective(Objective, abc.ABC):
     def _per_split_iterators(self, split: str) -> Tuple[Iterable[str], Iterable[str]]:
         """
         Default inputs iterator for unsupervised objectives. Returns input texts as both inputs and labels.
-        Not meant to be overriden when implementing custom data set. Instead choose to inherit either
+        Not meant to be overriden when implementing custom data set. Instead inherit
+        from SupervisedObjective, or UnsupervisedObjective (or their ancestors),
+        or override _get_inputs_iterator() instead.
+
         :param split: Data split to iterate over
         :return: a pair of identical [inputs_iterator, inputs_iterator]
         """
