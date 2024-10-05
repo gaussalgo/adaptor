@@ -12,22 +12,6 @@ from ..utils import Head
 
 class DataCollatorForCausalLM(DataCollatorForSeq2Seq):
 
-    @staticmethod
-    def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int):
-        """
-        Shift input ids one token to the right.
-        From transformers.modeling_bart.
-        """
-        shifted_input_ids = input_ids.new_zeros(input_ids.shape)
-        shifted_input_ids[:, 1:] = input_ids[:, :-1].clone()
-        shifted_input_ids[:, 0] = decoder_start_token_id
-
-        assert pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
-        # replace possible -100 values in labels by `pad_token_id`
-        shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
-
-        return shifted_input_ids
-
     def __call__(self,
                  features: List[Union[BatchEncoding, Dict[str, Iterable[Union[int, float]]]]],
                  return_tensors=None) -> BatchEncoding:
@@ -81,11 +65,15 @@ class DataCollatorForCausalLM(DataCollatorForSeq2Seq):
             causal_mask = causal_mask.expand(num_features, max_length, max_length)  # for batch_size
             out_features["encoder_attention_mask"] = causal_mask
 
-        bos_id = self.model.config.bos_token_id if self.model.config.bos_token_id is not None else 0
         pad_id = self.model.config.pad_token_id if self.model.config.pad_token_id is not None else 0
 
-        # CLM -> shift input one token to the right
-        out_features["input_ids"] = self.shift_tokens_right(out_features["input_ids"], bos_id, pad_id)
+        # no shifting of the labels here: this happens in the corresponding loss fn
+        labels = out_features["input_ids"].clone()
+        if self.tokenizer.pad_token_id is not None:
+            # ignore the padded positions from the loss: without this, CLM will not converge
+            labels[labels == pad_id] = -100
+        out_features["labels"] = labels
+
         return out_features
 
 
