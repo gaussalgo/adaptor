@@ -22,7 +22,7 @@ jobs:
         run: |
           set -ex
           python -V
-          pip install -U pip
+          pip install pip==24.0  # because of the fairseq bug in installation: https://github.com/facebookresearch/fairseq/issues/5518
           pip install -e .
           pip install flake8
       - name: Style check
@@ -43,7 +43,7 @@ jobs:
         run: |
           set -ex
           python -V
-          pip install -U pip
+          pip install pip==24.0  # because of the fairseq bug in installation: https://github.com/facebookresearch/fairseq/issues/5518
           pip install -e .[generative,examples]
           pip install pytype
       - name: Type check adaptor
@@ -68,7 +68,7 @@ jobs:
         run: |
           set -ex
           python -V
-          pip install -U pip
+          pip install pip==24.0  # because of the fairseq bug in installation: https://github.com/facebookresearch/fairseq/issues/5518
           pip install -e .[generative]
           pip install pytest
       - name: Unit tests

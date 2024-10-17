@@ -1,5 +1,5 @@
 import abc
-from typing import List, Union, Dict, Iterable, Optional
+from typing import Union, Dict, Optional, List, Iterable, Iterator
 
 import torch
 from torch.nn import CrossEntropyLoss
@@ -30,7 +30,7 @@ class DataCollatorForCausalLM(DataCollatorForSeq2Seq):
 
     def __call__(self,
                  features: List[Union[BatchEncoding, Dict[str, Iterable[Union[int, float]]]]],
-                 return_tensors=None) -> BatchEncoding:
+                 return_tensors=None) -> Iterable[Dict[str, torch.Tensor]]:
         """
         Custom DataCollator allowing to apply CausalLM also on models with fully-attended encoder.
         :param features: features to align
@@ -97,7 +97,43 @@ class CausalLanguageModeling(SequentialMixin, UnsupervisedObjective, abc.ABC):
                  **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.collator = DataCollatorForCausalLM(self.tokenizer, self.compatible_head_model)
+        self.collator = DataCollatorForSeq2Seq(self.tokenizer, self.compatible_head_model, pad_to_multiple_of=8)
+
+    def _get_seq2seq_collated_iterator(self,
+                                       source_texts: Iterable[str],
+                                       target_texts: Iterable[str]) -> Iterator[BatchEncoding]:
+        """
+        Creates an iterator over batches of encoded `source_texts` as inputs and `target_texts` as labels.
+        Override this to implement custom mapping, or unsupervised seq2seq objective. See e.g. BackTranslation.
+        :param source_texts: Input texts.
+        :param target_texts: Output (expected) texts to translate input texts into.
+        :return: Iterator of encoded batches.
+        """
+        features_batch = []
+        asserted_equal = False  # speedup: avoid repeated assertions of string equality
+        self.tokenizer.src_lang = self.source_lang_id
+        self.tokenizer.tgt_lang = self.target_lang_id
+
+        for source_text, target_text in zip(source_texts, target_texts):
+            if not asserted_equal:
+                assert source_text == target_text, ("CLM objective expects both texts to be the same. "
+                                                    "If you override this objective, it's possible that you should "
+                                                    "rather override SequentialMixin supporting different src and tgt.")
+                asserted_equal = True
+
+            sample_features = self.tokenizer(source_text, truncation=True)
+            sample_targets = self.tokenizer(target_text, truncation=True)
+
+            features_batch.append({"input_ids": sample_features.input_ids,
+                                   "attention_mask": sample_features.attention_mask,
+                                   "labels": sample_targets.input_ids})
+            if len(features_batch) == self.batch_size:
+                yield self.collator(features_batch)
+                features_batch = []
+
+        if features_batch:
+            # yield last nonempty residual batch
+            yield self.collator(features_batch)
 
     def _compute_loss(self,
                       logit_outputs: torch.FloatTensor,
