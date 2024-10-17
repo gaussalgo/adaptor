@@ -135,7 +135,6 @@ class CausalLanguageModeling(SequentialMixin, UnsupervisedObjective, abc.ABC):
             # yield last nonempty residual batch
             yield self.collator(features_batch)
 
-
     def _compute_loss(self,
                       logit_outputs: torch.FloatTensor,
                       labels: torch.LongTensor,
