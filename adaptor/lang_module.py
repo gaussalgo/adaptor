@@ -8,7 +8,7 @@ import torch
 from peft import PeftConfig, get_peft_model
 from transformers import PreTrainedTokenizer, AutoTokenizer
 
-from .utils import Head, HEAD_TO_MODEL_CLS, PEFT_BASE_MODEL_CHECKPOINT_SUBDIR
+from .utils import Head, HEAD_TO_MODEL_CLS
 
 logger = logging.getLogger()
 
@@ -65,12 +65,24 @@ class LangModule(torch.nn.Module):
             logger.info("Loaded tokenizer from %s", tokenizer_dir)
         return tokenizer
 
+    @staticmethod
+    def _set_peft_trainable_params(model: torch.nn.Module, trainable_model: torch.nn.Module) -> None:
+        other_model_params = {n: v for n, v in trainable_model.named_parameters()}
+        trainable_params = {n for n, v in trainable_model.named_parameters() if v.requires_grad}
+
+        trainables_count = 0
+        for name, param in model.named_parameters():
+            assert name in other_model_params, "Trying to initialize PEFT modules non-identical base models"
+            if name in trainable_params:
+                param.requires_grad = True
+                trainables_count += 1
+        logger.warning("Set %s parameter tensors for a new head as trainable", trainables_count)
+
     def load_head(self,
                   model_name_or_path: str,
                   head_type: Head,
                   load_as_peft: bool,
-                  head_kwargs: Dict[str, Any],
-                  continued_training: bool) -> torch.nn.Module:
+                  head_kwargs: Dict[str, Any]) -> torch.nn.Module:
         """
         Returns transformers model with a head of the requested type.
         :param model_name_or_path: base model identifier
@@ -85,56 +97,51 @@ class LangModule(torch.nn.Module):
             if not load_as_peft:
                 new_head = BaseModelCls.from_pretrained(model_name_or_path, **head_kwargs)
             else:
-                PeftModelCls = HEAD_TO_MODEL_CLS[head_type]["peft"]
-                # if that fails, trying to load as a PEFT model
                 logger.warning("Loading model_name_or_path='%s' as peft model.", model_name_or_path)
-                # base model resolution
-                # we avoid reloading the base model separately for each lora module
+                PeftModelCls = HEAD_TO_MODEL_CLS[head_type]["peft"]
 
-                if continued_training:
-                    # In PEFT training with adaptor, the base model is checkpointed in a pre-defined directory
-                    base_model_path = os.path.join(model_name_or_path, "..", PEFT_BASE_MODEL_CHECKPOINT_SUBDIR)
+                # Rule of thumb: PEFT modules keep track of their own base model
+                # In continued training with PEFT, the PeftConfig must be persisted
+                try:
+                    # try loading as an existing PEFT model (=> it already has its PeftConfig)
+                    peft_model_config = PeftConfig.from_pretrained(model_name_or_path)
                     if self.peft_base_model is None:
-                        self.peft_base_model = BaseModelCls.from_pretrained(base_model_path)
+                        # we avoid reloading the base model separately for each lora module
+                        self.peft_base_model = BaseModelCls.from_pretrained(peft_model_config.base_model_name_or_path)
 
+                    # if it is not possible, fall back to loading a brand new PEFT model
                     new_head = PeftModelCls.from_pretrained(deepcopy(self.peft_base_model), model_name_or_path,
                                                             **head_kwargs)
-                    logger.warning("Reloaded existing PEFT module from %s with base model %s.",
-                                   model_name_or_path, base_model_path)
-                else:
-                    try:
-                        # first try loading as an already-trained PEFT model (=> it already has its PeftConfig)
-                        # if it does not, fall back to loading a brand new PEFT model
-                        peft_model_config = PeftConfig.from_pretrained(model_name_or_path)
-                        base_model_path = peft_model_config.base_model_name_or_path
-                        if self.peft_base_model is None:
-                            self.peft_base_model = BaseModelCls.from_pretrained(base_model_path)
+                    # new_peft_model is used to find trainable parameters in continued training/reloading-PEFT case
+                    new_peft_model = get_peft_model(deepcopy(self.peft_base_model), **head_kwargs)
 
-                        new_head = PeftModelCls.from_pretrained(deepcopy(self.peft_base_model), model_name_or_path,
-                                                                **head_kwargs)
-                        logger.warning("Reloaded existing PEFT module from %s with base model %s.",
-                                       model_name_or_path, base_model_path)
-                    except ValueError:
-                        logger.warning("Initializing a new PEFT module.")
-                        # ValueError: Can't find 'adapter_config.json' at {model_name_or_path}
-                        # -> we initialize a new PEFT model from a full pre-trained transformer (simplest case)
-                        assert 'peft_config' in head_kwargs, \
-                            ("Initializing an objective with PEFT model requires to pass a 'peft_config' "
-                             "witin `objective_args_for_head_config`, e.g: "
-                             "`objective = Objective(objective_args_for_head_config={'peft_config': LoraConfig()}`."
-                             " See the docs on https://huggingface.co/docs/peft/main/en/package_reference/config")
-                        if self.peft_base_model is None:
-                            self.peft_base_model = BaseModelCls.from_pretrained(model_name_or_path)
-                        head_kwargs['peft_config'].base_model_name_or_path = model_name_or_path
-                        new_head = get_peft_model(deepcopy(self.peft_base_model), **head_kwargs)
+                    self._set_peft_trainable_params(new_head, new_peft_model)
+                    logger.warning("Reloaded existing PEFT module from %s with base model %s.",
+                                   model_name_or_path, peft_model_config.base_model_name_or_path)
+                except ValueError:
+                    logger.warning("Initializing a new PEFT module.")
+                    # ValueError: Can't find 'adapter_config.json' at {model_name_or_path}
+                    # -> we initialize a new PEFT model from a full pre-trained transformer (simplest case)
+                    assert 'peft_config' in head_kwargs, \
+                        ("Initializing an objective with PEFT model requires to pass a 'peft_config' "
+                         "within `objective_args_for_head_config`, e.g: "
+                         "`objective = Objective(objective_args_for_head_config={'peft_config': LoraConfig()}`."
+                         " See the docs on https://huggingface.co/docs/peft/main/en/package_reference/config")
+                    if self.peft_base_model is None:
+                        self.peft_base_model = BaseModelCls.from_pretrained(model_name_or_path)
+                    head_kwargs['peft_config'].base_model_name_or_path = model_name_or_path
+
+                    # note that in practice, PEFT model initialisation is never called twice!
+                    new_head = get_peft_model(deepcopy(self.peft_base_model), **head_kwargs)
         except KeyError:
             # requested head type is not in our map
             logger.warning("Model in %s is not a transformers model. "
                            "Trying to load as a Pytorch model." % model_name_or_path)
             new_head = torch.load(model_name_or_path, **head_kwargs)
-        except ValueError:
+        except ValueError as e:
             # model type is recognized, but could not be loaded
-            raise ValueError("Could not load model from %s as a transformer or peft model." % model_name_or_path)
+            raise ValueError("Could not load model from %s as a transformer or peft model." % model_name_or_path) \
+                from e
 
         return new_head
 
@@ -150,6 +157,7 @@ class LangModule(torch.nn.Module):
         Registers a selected model to this LangModule, i.e. merges its weights with first one of self.trainable_models,
         and registers new model into self.trainable_models[objective_id].
         :param head_type: if no `new_head` is given, a transformer of self.model_name_or_path
+        :param load_as_peft: whether to load the head for the new objective as PEFT (e.g. LoRA) module
         with a head of `head_type` will be registered.
         :param objective_id: key of the new_head model used to route data samples
         :param checkpoint_dir: directory to objective's checkpoints. Overrides model_name_or_path in continued training
@@ -167,8 +175,7 @@ class LangModule(torch.nn.Module):
             new_head = self.load_head(self.model_name_or_path if checkpoint_dir is None else checkpoint_dir,
                                       head_type,
                                       load_as_peft,
-                                      head_kwargs,
-                                      continued_training=checkpoint_dir is not None)
+                                      head_kwargs)
         # this applies to the 2nd+ -added models: they adopt the shared parameters of the first lang_module
         if do_merge and len(self.trainable_models) >= 1:
             unmatched_modules = self._partially_merge_models(list(self.trainable_models.values())[0], new_head)

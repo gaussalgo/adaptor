@@ -134,7 +134,7 @@ class Adapter(Trainer):
             # For simplicity, we assume that base models for all pefts are the same
             # -- this might be violated only if the user passes custom model_head to Objective
             # and additionally creates a peft module on it.
-            # Thus, we retrieve a base model from an arbitrary (i.e. the first) peft-model objective
+            # With this assumption, we retrieve a base model from an arbitrary (i.e. the first) peft-model objective
             peft_obj = next(o for o in self.schedule.objectives["train"].values()
                             if isinstance(o.compatible_head_model, PeftModel))
 

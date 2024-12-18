@@ -487,6 +487,11 @@ class Objective(abc.ABC):
         """
         head_config = objective_args_for_head_config if objective_args_for_head_config is not None else {}
 
+        if (self.peft_objective and not "peft_config" in head_config) or \
+            (not self.peft_objective and "peft_config" in head_config):
+            raise ValueError("When loading an objective with a PEFT module, you must both set the `peft_objective=True`"
+                             " *and* provide a `peft_config` in objective_args_for_head_config argument.")
+
         # Support for continued training:
         checkpoint_dir = None
         possible_checkpoint_path = os.path.join(lang_module.model_name_or_path, str(self))
