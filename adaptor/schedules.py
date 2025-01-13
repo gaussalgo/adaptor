@@ -255,8 +255,6 @@ class Schedule(abc.ABC):
         :return: AdaptationDataset combined according to this Schedule.
         """
         length_combined = int(sum((o.dataset_length[split] // o.batch_size) for o in self.objectives[split].values()))
-        if split == "train":
-            length_combined *= int(self.args.num_train_epochs)
 
         return TransformerAdaptationDataset(self._combine_datasets(split), length_combined)
 

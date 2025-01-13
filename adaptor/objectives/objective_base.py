@@ -383,7 +383,9 @@ class Objective(abc.ABC):
         should_offset_dataset = self.dataset_length[split] and (split == "train" and self.epoch == 1)
         dataset_samples_offset = self.data_iteration_offset % self.dataset_length[split] if should_offset_dataset else 0
         # adjust the current epoch accordingly
-        self.epoch = (self.data_iteration_offset // self.dataset_length[split]) + 1
+        offset_epoch = (self.data_iteration_offset // self.dataset_length[split])
+        if offset_epoch:
+            self.epoch = offset_epoch + 1
         # do not apply the offset again in the next epochs
         self.data_iteration_offset = 0
 
