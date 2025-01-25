@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="adaptor",
-    version='0.2.3',
+    version='0.2.4',
     description="Adaptor: Objective-centric Adaptation Framework for Language Models.",
     long_description_content_type="text/markdown",
     long_description=readme,
@@ -23,8 +23,9 @@ setup(
     author="Michal Stefanik & Adaptor Authors & Contributors",
     author_email="stefanik.m@mail.muni.cz",
     url="https://github.com/gaussalgo/adaptor",
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     license="MIT",
+    license_files=["LICENSE"],
     packages=find_packages(include=["adaptor", "adaptor.*"]),
     include_package_data=True,
     zip_safe=True,
