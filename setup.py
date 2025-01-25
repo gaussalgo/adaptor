@@ -34,7 +34,8 @@ setup(
         "sentencepiece",
         "accelerate>=0.20.1",
         "peft>=0.10.0,<0.13.0",
-        "prefetch-generator>=1.0.3"
+        "prefetch-generator>=1.0.3",
+        "numpy<1.24"  # constrained by integration of a prism metric, can be removed, once prism is deprecated
     ],
     test_require=[
         "pytest"
@@ -45,8 +46,7 @@ setup(
             "rouge-score",
             "bert-score",
             "fairseq",
-            "protobuf<=3.20.1",
-            "numpy<1.24"  # constrained by integration of a prism metric, can be removed, once prism is deprecated
+            "protobuf<=3.20.1"
         ],
         "examples": [
             "comet-ml",
