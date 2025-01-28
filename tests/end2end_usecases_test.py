@@ -115,7 +115,6 @@ def test_evaluation_ner():
 
 
 def test_adaptation_classification():
-
     lang_module = LangModule(test_base_models["sequence_classification"])
 
     mlm = MaskedLanguageModeling(lang_module=lang_module,
@@ -146,3 +145,84 @@ def test_adaptation_classification():
     output = classifier(**inputs)
     output_label_id = output.logits.argmax(-1)[0].item()
     print("Prediction: %s" % classifier.config.id2label[output_label_id])
+
+
+def test_adaptation_translation_modular():
+    # 1. pick the models - randomly pre-initialize the appropriate heads
+    lang_module = LangModule(test_base_models["translation_mono"])
+
+    # (optional) pick train and validation evaluators for the objectives
+    seq2seq_evaluators = [BLEU(decides_convergence=True)]
+
+    import peft
+    peft_config = peft.LoraConfig(
+            task_type=peft.TaskType.SEQ_2_SEQ_LM, inference_mode=False, r=32, lora_alpha=32, lora_dropout=0.1,
+            target_modules=["k_proj", "q_proj", "v_proj", "fc1", "fc2"]
+    )
+
+    # 2. pick objectives
+    objectives = [Sequence2Sequence(lang_module, batch_size=1,
+                                    texts_or_path=paths["texts"]["translation"],
+                                    val_evaluators=seq2seq_evaluators,
+                                    labels_or_path=paths["labels"]["translation"],
+                                    peft_objective=True,
+                                    objective_args_for_head_config={"peft_config": peft_config},
+                                    objective_id="translation-customer1"),
+                  Sequence2Sequence(lang_module, batch_size=1,
+                                    texts_or_path=paths["labels"]["translation"],
+                                    val_evaluators=seq2seq_evaluators,
+                                    labels_or_path=paths["texts"]["translation"],
+                                    peft_objective=True,
+                                    objective_args_for_head_config={"peft_config": peft_config},
+                                    objective_id="translation-customer2")
+                  ]
+    # 3. pick a schedule of the selected objectives
+    # this one will shuffle the batches of both objectives
+    schedule = ParallelSchedule(objectives, training_arguments)
+
+    # 4. train using Adapter
+    adapter = Adapter(lang_module, schedule, training_arguments)
+    adapter.train()
+
+    # 5. save the trained (multi-headed) lang_module
+    adapter.save_model("peft_translator_model")
+
+    # The trained modules are persisted in subdirectories of training_args.output_dir
+    # if objective-id is given, it is prepended to the resulting path of each objective's module (see adapter.py)
+    trained_module_path = "peft_translator_model/translation-customer1-Sequence2Sequence"
+
+    # 6. either reload each of the trained modules as a separate model
+    peft_model = peft.AutoPeftModelForSeq2SeqLM.from_pretrained(trained_module_path)
+
+    tokenizer = AutoTokenizer.from_pretrained(trained_module_path)
+    tokenizer.src_lang, tokenizer.tgt_lang = "en", "cs"
+
+    inputs = tokenizer("A piece of text to translate.", return_tensors="pt")
+    output_ids = peft_model.generate(**inputs)
+    output_text = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+    print(output_text)
+
+    # 7. or you can save memory by loading all the inference modules in a single model using Adaptor's LangModule,
+    # by registering the matching objectives taking care of the inference routing.
+    inference_lang_module = LangModule("peft_translator_model")
+
+    # Here, Objectives will get registered in the shared LangModule.
+    # The condition to reload the matching weights into the new modules is that
+    # the objectives' persisting dirs -- specified by the objective name and objective_id -- must match!
+    inference_objectives = [Sequence2Sequence(inference_lang_module, batch_size=1,
+                                              texts_or_path=[],
+                                              labels_or_path=[],
+                                              peft_objective=True,
+                                              objective_args_for_head_config={"peft_config": peft_config},
+                                              objective_id="translation-customer1"),
+                            Sequence2Sequence(inference_lang_module, batch_size=1,
+                                              texts_or_path=[],
+                                              labels_or_path=[],
+                                              peft_objective=True,
+                                              objective_args_for_head_config={"peft_config": peft_config},
+                                              objective_id="translation-customer2")]
+    inputs = tokenizer("A piece of text to translate.", return_tensors="pt")
+    output_ids = inference_objectives[0].compatible_head_model.generate(**inputs)
+
+    output_text = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+    print(output_text)

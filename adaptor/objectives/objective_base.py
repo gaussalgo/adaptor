@@ -39,6 +39,7 @@ class Objective(abc.ABC):
     progressbar: Dict[str, tqdm]
     evaluators: Dict[str, List[EvaluatorBase]]
     data_iteration_offset: int
+    routing_id: torch.Tensor
 
     num_samples_per_log: Dict[str, int]
     num_samples_to_prefetch: int = 10
@@ -93,10 +94,10 @@ class Objective(abc.ABC):
         If the training fails (in the interactive - `-i` mode), the last, possibly error input can be retrieved
         from `this_objective.last_input`.
         """
-
+        self.routing_id = torch.tensor(id(self))
         self.batch_size = batch_size
         self.tokenizer = lang_module.tokenizer
-        self.given_id = objective_id
+        self.objective_id = objective_id
         self.peft_objective = peft_objective
         self.loss_weight = loss_weight
 
@@ -359,7 +360,7 @@ class Objective(abc.ABC):
             return sample
 
         def _add_oid(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-            sample["oid"] = torch.tensor(id(self))
+            sample["oid"] = self.routing_id
             return sample
 
         device_inputs_iter = map(partial(_sample_to_device, device), inputs_iter)
@@ -507,12 +508,13 @@ class Objective(abc.ABC):
             logger.warning("Reloading objective %s's module from checkpoint %s", str(self), possible_checkpoint_path)
             checkpoint_dir = possible_checkpoint_path
 
-            # adjust data iterator according to trainer_state -- in continued training, it is guaranteed that it exists
-            from transformers import TrainerState
-            trainer_state = TrainerState.load_from_json(os.path.join(lang_module.model_name_or_path,
-                                                                     "trainer_state.json"))
-            logger.warning("Data iteration of %s will continue on a step %s.", self, trainer_state.global_step)
-            self.data_iteration_offset = trainer_state.global_step
+            # if this is a checkpoint path (not a saved lang_module), adjust data iterator according to trainer_state
+            trainer_state_path = os.path.join(lang_module.model_name_or_path, "trainer_state.json")
+            if os.path.exists(trainer_state_path):
+                from transformers import TrainerState
+                trainer_state = TrainerState.load_from_json(trainer_state_path)
+                logger.warning("Data iteration of %s will continue on a step %s.", self, trainer_state.global_step)
+                self.data_iteration_offset = trainer_state.global_step
         else:
             logger.warning("No checkpoint found on %s. Attempting to load a model from '%s'.",
                            possible_checkpoint_path, lang_module.model_name_or_path)
@@ -530,8 +532,8 @@ class Objective(abc.ABC):
         Default pretty print of this objective. Identification used also in the logs.
         :return: string identifier of this objective.
         """
-        if self.given_id:
-            return str("%s-%s" % (self.given_id, self.__class__.__name__))
+        if self.objective_id:
+            return str("%s-%s" % (self.objective_id, self.__class__.__name__))
         else:
             return self.__class__.__name__
 

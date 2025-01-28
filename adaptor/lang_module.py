@@ -87,8 +87,8 @@ class LangModule(torch.nn.Module):
         Returns transformers model with a head of the requested type.
         :param model_name_or_path: base model identifier
         :param head_type: type of the requested head
+        :param load_as_peft: whether to load the new head as PEFT module or a standard transformers model
         :param head_kwargs: additional initialization arguments, adjusting its default, or persisted config
-        :param continued_training: Whether this is a reload of the model within continued training.
         :return: transformer with a head of requested type or a new pytorch model
         """
         try:
@@ -109,7 +109,6 @@ class LangModule(torch.nn.Module):
                         # we avoid reloading the base model separately for each lora module
                         self.peft_base_model = BaseModelCls.from_pretrained(peft_model_config.base_model_name_or_path)
 
-                    # if it is not possible, fall back to loading a brand new PEFT model
                     new_head = PeftModelCls.from_pretrained(deepcopy(self.peft_base_model), model_name_or_path,
                                                             **head_kwargs)
                     # new_peft_model is used to find trainable parameters in continued training/reloading-PEFT case
@@ -119,6 +118,7 @@ class LangModule(torch.nn.Module):
                     logger.warning("Reloaded existing PEFT module from %s with base model %s.",
                                    model_name_or_path, peft_model_config.base_model_name_or_path)
                 except ValueError:
+                    # if loading as existing PEFT is not possible, fall back to loading a brand new PEFT model
                     logger.warning("Initializing a new PEFT module.")
                     # ValueError: Can't find 'adapter_config.json' at {model_name_or_path}
                     # -> we initialize a new PEFT model from a full pre-trained transformer (simplest case)
