@@ -47,7 +47,7 @@ setup(
             "bert-score",
             "fairseq",
             "protobuf<=3.20.1",
-            # "omegaconf>=2.2"  # previous versions are incompatible with pip<25 due to unsupported deps syntax ('>=5.1.*')
+            # "omegaconf>=2.2"  # previous versions are incompatible with pip<25 for unsupported deps syntax ('>=5.1.*')
         ],
         "examples": [
             "comet-ml",
