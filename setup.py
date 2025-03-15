@@ -45,9 +45,9 @@ setup(
             "sacrebleu",
             "rouge-score",
             "bert-score",
-            "fairseq>=0.12.2",
+            "fairseq",
             "protobuf<=3.20.1",
-            "omegaconf>=2.2"  # older versions use unsupported dependencies resolution in pip>25 ('>=5.1.*')
+            # "omegaconf>=2.2"  # previous versions are incompatible with pip<25 due to unsupported deps syntax ('>=5.1.*')
         ],
         "examples": [
             "comet-ml",
