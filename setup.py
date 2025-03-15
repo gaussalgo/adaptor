@@ -45,7 +45,7 @@ setup(
             "sacrebleu",
             "rouge-score",
             "bert-score",
-            "fairseq",
+            "fairseq>=0.12.2",
             "protobuf<=3.20.1",
             "omegaconf>=2.2"  # older versions use unsupported dependencies resolution in pip>25 ('>=5.1.*')
         ],
