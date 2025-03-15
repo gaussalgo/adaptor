@@ -46,7 +46,8 @@ setup(
             "rouge-score",
             "bert-score",
             "fairseq",
-            "protobuf<=3.20.1"
+            "protobuf<=3.20.1",
+            "omegaconf>=2.2"  # older versions use unsupported dependencies resolution in pip>25 ('>=5.1.*')
         ],
         "examples": [
             "comet-ml",
