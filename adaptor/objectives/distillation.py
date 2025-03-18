@@ -123,7 +123,8 @@ class Distillation(Objective, abc.ABC):
     def _hidden_states_loss(self,
                             student_outputs: ModelOutput,
                             teacher_outputs: ModelOutput,
-                            attn_mask: torch.LongTensor) -> torch.FloatTensor:
+                            attn_mask: torch.LongTensor,
+                            decoder_attn_mask: torch.BoolTensor) -> torch.FloatTensor:
         if hasattr(teacher_outputs, "hidden_states"):
             # encoder-, or decoder-only
             assert hasattr(student_outputs, "hidden_states"), "Student and teacher must be of the same type"
@@ -143,7 +144,7 @@ class Distillation(Objective, abc.ABC):
             teacher_decoder_hidden = teacher_outputs.decoder_hidden_states
 
             loss = (self._loss_for_hidden_states(student_encoder_hidden, teacher_encoder_hidden, attn_mask) +
-                    self._loss_for_hidden_states(student_decoder_hidden, teacher_decoder_hidden, attn_mask))
+                    self._loss_for_hidden_states(student_decoder_hidden, teacher_decoder_hidden, decoder_attn_mask))
         else:
             raise ValueError("Please initialize both teacher and student model with `output_hidden_states=True`")
 
@@ -163,10 +164,17 @@ class Distillation(Objective, abc.ABC):
             teacher_outputs = self.teacher_model(**{k: v for k, v in inputs.items() if k in teacher_inputs})
             teacher_logits = teacher_outputs.logits
 
+        non_ignored_labels = None  # used only in the case of encoder-decoder models
         if self.restrict_loss_to_mask:
             # pick only the predictions of tokens on the attended positions (i.e. ignore the others)
-            attn_mask_reshaped = inputs["attention_mask"].unsqueeze(-1).expand_as(student_logits).bool()
-
+            if self.compatible_head_model.config.is_encoder_decoder:
+                # encoder-decoder -> attention_mask actually applies to labels
+                # we infer the labels attention mask from positions not ignored in the loss
+                non_ignored_labels = (0 < inputs["labels"]) < self.tokenizer.vocab_size
+                attn_mask_reshaped = non_ignored_labels.unsqueeze(-1).expand_as(student_logits).bool()
+            else:
+                # encoder-only or decoder-only model -> attention mask applies to labels
+                attn_mask_reshaped = inputs["attention_mask"].unsqueeze(-1).expand_as(student_logits).bool()
             student_logits_flat = torch.masked_select(student_logits, attn_mask_reshaped)
             student_logits_unbatched = student_logits_flat.reshape(-1, student_logits.shape[-1])
 
@@ -188,7 +196,8 @@ class Distillation(Objective, abc.ABC):
             student_inputs = inspect.getfullargspec(self.compatible_head_model.forward).args
             student_outputs = self.compatible_head_model(**{k: v for k, v in inputs.items() if k in student_inputs})
 
-            hidden_loss = self._hidden_states_loss(student_outputs, teacher_outputs, inputs["attention_mask"])
+            hidden_loss = self._hidden_states_loss(student_outputs, teacher_outputs,
+                                                   inputs["attention_mask"], non_ignored_labels)
             hidden_loss_scaled = self.hidden_cossim_loss_weight * hidden_loss
 
             distil_loss = distil_loss + hidden_loss_scaled
