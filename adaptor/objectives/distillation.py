@@ -160,6 +160,10 @@ class Distillation(Objective, abc.ABC):
         ce_loss = CrossEntropyLoss()
 
         teacher_inputs = inspect.getfullargspec(self.teacher_model.forward).args
+        device = student_logits.device
+        if self.teacher_model.device != device:
+            self.teacher_model = self.teacher_model.to(device)
+
         with torch.no_grad():
             teacher_outputs = self.teacher_model(**{k: v for k, v in inputs.items() if k in teacher_inputs})
             teacher_logits = teacher_outputs.logits
