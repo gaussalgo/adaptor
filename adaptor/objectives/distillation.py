@@ -116,7 +116,8 @@ class Distillation(Objective, abc.ABC):
             student_hidden_unbatched = student_hidden.reshape(-1, student_hidden.shape[-1])
             teacher_hidden_unbatched = teacher_hidden_selected.reshape(-1, student_hidden.shape[-1])
 
-        similarity_or_distance_loss = torch.ones(student_hidden_unbatched.shape[0])
+        similarity_or_distance_loss = torch.ones(student_hidden_unbatched.shape[0],
+                                                 device=student_hidden_unbatched.device)
 
         return cosine_loss(student_hidden_unbatched, teacher_hidden_unbatched, similarity_or_distance_loss)
 
