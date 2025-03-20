@@ -54,6 +54,8 @@ class Objective(abc.ABC):
                  val_texts_or_path: Optional[Union[str, List[str]]] = None,
                  train_evaluators: Sequence[EvaluatorBase] = (),
                  val_evaluators: Sequence[EvaluatorBase] = (),
+                 train_dataset_length: Optional[int] = None,
+                 val_dataset_length: Optional[int] = None,
                  share_other_objective_head: Optional["Objective"] = None,
                  objective_module: Optional[torch.nn.Module] = None,
                  merge_objective_module: bool = True,
@@ -71,7 +73,7 @@ class Objective(abc.ABC):
         Shared initialisation logic of every Objective.
         Registers a compatible model for this objective to given `lang_module`,
         initialises state variables for logging, registers evaluators,
-        initialises data set inputs and labels either from path to .txt files, or a lists of strings.
+        initialises data set inputs and labels either from path to .txt files, or a lists/iterables of strings.
 
         :param lang_module: LangModule to register a model of this objective into.
         :param batch_size: Sample batch size to be retrieved from this objective.
@@ -79,6 +81,8 @@ class Objective(abc.ABC):
         :param val_texts_or_path: A path to a .txt file, or a list of strings that will be used as validation inputs.
         :param train_evaluators: Evaluators to be called on every logging step on a subset of training outputs.
         :param val_evaluators: Evaluators to be called on every evaluation step on validation outputs.
+        :param train_dataset_length: Circumvent auto inference of the train dataset length and set it manually.
+        :param val_dataset_length: Circumvent auto inference of the validation dataset length and set it manually.
         :param share_other_objective_head: If given, this objective will share module with other given objective.
         :param objective_module: If given, this module will be registered for this objective.
         :param merge_objective_module: If to merge the newly initialized or passed objective's module with others.
@@ -135,7 +139,10 @@ class Objective(abc.ABC):
         else:
             self.texts = texts_or_path
 
-        self.dataset_length["train"] = self._compute_data_source_length(texts_or_path)
+        if train_dataset_length is None:
+            self.dataset_length["train"] = self._compute_data_source_length(texts_or_path)
+        else:
+            self.dataset_length["train"] = train_dataset_length
 
         for split, given_evaluators in zip(("train", "eval"), (train_evaluators, val_evaluators)):
             for given_evaluator in given_evaluators:
@@ -154,7 +161,10 @@ class Objective(abc.ABC):
             else:
                 self.val_texts = val_texts_or_path
 
-            self.dataset_length["eval"] = self._compute_data_source_length(val_texts_or_path)
+            if val_dataset_length is None:
+                self.dataset_length["eval"] = self._compute_data_source_length(val_texts_or_path)
+            else:
+                self.dataset_length["eval"] = val_dataset_length
 
     def _check_supported_data_source_format(self, path: str) -> None:
         if not os.path.exists(path):
