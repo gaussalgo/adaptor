@@ -32,7 +32,10 @@ setup(
         "torch>=1.7",
         "transformers<=4.30.2",  # TODO upper-closed on 4.30.2: Problem with returning empty batches
         "sentencepiece",
-        "accelerate>=0.20.1"
+        "accelerate>=0.20.1",
+        "peft>=0.10.0,<0.13.0",
+        "prefetch-generator>=1.0.3",
+        "numpy<1.24"  # constrained by integration of a prism metric, can be removed, once prism is deprecated
     ],
     test_require=[
         "pytest"
@@ -44,6 +47,7 @@ setup(
             "bert-score",
             "fairseq",
             "protobuf<=3.20.1",
+            # "omegaconf>=2.2"  # previous versions are incompatible with pip<25 for unsupported deps syntax ('>=5.1.*')
         ],
         "examples": [
             "comet-ml",

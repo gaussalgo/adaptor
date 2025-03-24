@@ -1,17 +1,19 @@
 import abc
+import logging
 from functools import lru_cache
-from typing import List, Sequence, Optional, Dict, Iterator, Union
+from typing import List, Sequence, Optional, Dict, Union, Any, Tuple
 
 import numpy as np
 import torch
 from bert_score import BERTScorer
 from rouge_score import rouge_scorer
 from sacrebleu import corpus_bleu
-from transformers import PreTrainedTokenizer, BatchEncoding, MBart50Tokenizer, MBartTokenizer
+from transformers import PreTrainedTokenizer, BatchEncoding
 
 from .evaluator_base import EvaluatorBase
-from .prism import Prism
 from ..utils import Head, AdaptationDataset
+
+logger = logging.getLogger()
 
 
 class GenerativeEvaluator(EvaluatorBase, abc.ABC):
@@ -25,55 +27,46 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
     """
 
     compatible_heads: List[Head] = [Head.SEQ2SEQ]
+    generation_kwargs: Tuple[Tuple[str, Any]]  # to use lru_cache, the args must be hashable
 
     def __init__(self,
                  use_generate: bool = True,
                  progress_bar: Optional[bool] = True,
                  decides_convergence: Optional[bool] = False,
-                 additional_sep_char: Optional[str] = None):
+                 additional_sep_char: Optional[str] = None,
+                 generation_kwargs: Dict[str, Any] = {}):
         super().__init__(decides_convergence)
 
         self.additional_sep_char = additional_sep_char
         self.use_generate = use_generate
         self.progress_bar = progress_bar
+        self.generation_kwargs = tuple(generation_kwargs.items())
 
     @staticmethod
     @lru_cache(maxsize=10000)
     def _autoregressive_predict_one(input_ids: torch.LongTensor,
                                     attention_mask: torch.LongTensor,
                                     model: torch.nn.Module,
-                                    tokenizer: PreTrainedTokenizer) -> torch.LongTensor:
+                                    generation_kwargs: Tuple[Tuple[str, Any]]) -> torch.LongTensor:
         """
         Performs a generation for a single input batch. The results are meant to be cached,
         so that other generative evaluators do not perform a generation repeatedly.
         """
-        if isinstance(tokenizer, MBart50Tokenizer):
-            # Forced BOS token for MBart50
-            return model.generate(input_ids=input_ids, attention_mask=attention_mask,
-                                  forced_bos_token_id=tokenizer.lang_code_to_id[tokenizer.tgt_lang]).detach().cpu()
-        elif isinstance(tokenizer, MBartTokenizer):
-            # Forced BOS token for MBart
-            return model.generate(input_ids=input_ids, attention_mask=attention_mask,
-                                  decoder_start_token_id=tokenizer.lang_code_to_id[tokenizer.tgt_lang]).detach().cpu()
-        else:
-            return model.generate(input_ids=input_ids, attention_mask=attention_mask).detach().cpu()
+        kwargs = dict(generation_kwargs)
+        return model.generate(input_ids=input_ids, attention_mask=attention_mask, **kwargs).detach().cpu()
 
     def _autoregressive_predict(self,
                                 model: torch.nn.Module,
                                 inputs_batch: Dict[str, torch.LongTensor],
-                                tokenizer: PreTrainedTokenizer) -> Iterator[torch.LongTensor]:
+                                tokenizer: PreTrainedTokenizer) -> torch.LongTensor:
         """
         Performs an iterative generation using the default configuration of the model's `generate` method.
         :param model: model to use for a generation. Must implement its own `generate` method.
         :param inputs_batch: a batch of inputs with `input_ids` and `attention_mask` attributes.
         :param tokenizer: a tokenizer corresponding to a model. If applicable, used to resolve special language_ids.
         """
-
-        assert hasattr(model, "generate"), "If Evaluator(use_generate=True), " \
-                                           "evaluated model must have its generate() method."
-
         return self._autoregressive_predict_one(inputs_batch["input_ids"], inputs_batch["attention_mask"],
-                                                model, tokenizer)
+                                                model, self.generation_kwargs)
 
     @staticmethod
     def _argmax_predict(model: torch.nn.Module,
@@ -94,6 +87,14 @@ class GenerativeEvaluator(EvaluatorBase, abc.ABC):
         """
         expected_str = []
         actual_str = []
+
+        if self.use_generate:
+            assert hasattr(model, "generate"), "If Evaluator(use_generate=True), " \
+                                               "the evaluated model must have implement a generate() method."
+
+            if hasattr(tokenizer, "lang_code_to_id") and not any("token_id" in k for k, v in self.generation_kwargs):
+                logger.warning("Your tokenizer has a `lang_code_to_id` attribute, but no `*token_id` was used in "
+                               "generation_kwargs. Be sure to check the model docs on how to generate with this model.")
 
         for batch in dataset:
             with torch.no_grad():
@@ -187,6 +188,7 @@ class PRISM(GenerativeEvaluator):
                  probability: Optional[bool] = False,
                  model_dir: str = "prism/model_dir",
                  **kwargs):
+        from .prism import Prism
         # language must be set, see prism.py: MODELS['langs'] for a list of supported langs
         super().__init__(**kwargs)
         self.probability = probability

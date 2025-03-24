@@ -1,6 +1,8 @@
 import abc
 import itertools
 import logging
+import os.path
+from functools import partial
 from typing import List, Union, Optional, Iterable, Tuple, Dict, Sequence, Any, Iterator
 
 import torch
@@ -20,7 +22,7 @@ class Objective(abc.ABC):
     """
 
     compatible_head: Head
-    given_id: Optional[str]
+    given_id: Optional[str] = ""
     epoch: int
     num_steps: int
     last_input: Optional[Union[BatchEncoding, Dict[str, torch.Tensor]]]
@@ -36,8 +38,14 @@ class Objective(abc.ABC):
     evaluations_history: Dict[str, Dict[Union[str, EvaluatorBase], List[float]]]
     progressbar: Dict[str, tqdm]
     evaluators: Dict[str, List[EvaluatorBase]]
+    data_iteration_offset: int
+    routing_id: torch.Tensor
 
     num_samples_per_log: Dict[str, int]
+    num_samples_to_prefetch: int = 10
+
+    peft_objective: bool
+    save_objective_module: bool
 
     def __init__(self,
                  lang_module: LangModule,
@@ -46,19 +54,26 @@ class Objective(abc.ABC):
                  val_texts_or_path: Optional[Union[str, List[str]]] = None,
                  train_evaluators: Sequence[EvaluatorBase] = (),
                  val_evaluators: Sequence[EvaluatorBase] = (),
+                 train_dataset_length: Optional[int] = None,
+                 val_dataset_length: Optional[int] = None,
                  share_other_objective_head: Optional["Objective"] = None,
                  objective_module: Optional[torch.nn.Module] = None,
+                 merge_objective_module: bool = True,
+                 save_objective_module: bool = True,
                  objective_args_for_head_config: Dict[str, Any] = {},
                  objective_id: Optional[str] = "",
                  loss_weight: Optional[float] = 1,
                  max_samples_per_log: int = 1000,
                  max_samples_per_eval_log: int = 10000,
-                 remember_last_input: Optional[bool] = False):
+                 data_iteration_offset: int = 0,
+                 prefetch_in_parallel_thread: bool = False,
+                 remember_last_input: Optional[bool] = False,
+                 peft_objective: Optional[bool] = False):
         """
         Shared initialisation logic of every Objective.
         Registers a compatible model for this objective to given `lang_module`,
         initialises state variables for logging, registers evaluators,
-        initialises data set inputs and labels either from path to .txt files, or a lists of strings.
+        initialises data set inputs and labels either from path to .txt files, or a lists/iterables of strings.
 
         :param lang_module: LangModule to register a model of this objective into.
         :param batch_size: Sample batch size to be retrieved from this objective.
@@ -66,8 +81,12 @@ class Objective(abc.ABC):
         :param val_texts_or_path: A path to a .txt file, or a list of strings that will be used as validation inputs.
         :param train_evaluators: Evaluators to be called on every logging step on a subset of training outputs.
         :param val_evaluators: Evaluators to be called on every evaluation step on validation outputs.
+        :param train_dataset_length: Circumvent auto inference of the train dataset length and set it manually.
+        :param val_dataset_length: Circumvent auto inference of the validation dataset length and set it manually.
         :param share_other_objective_head: If given, this objective will share module with other given objective.
         :param objective_module: If given, this module will be registered for this objective.
+        :param merge_objective_module: If to merge the newly initialized or passed objective's module with others.
+        :param save_objective_module: If to separately save the module of this objective on calling save_model.
         :param objective_args_for_head_config: Extra arguments that can be passed to .from_pretrained() on head init.
         :param objective_id: Identifier of this objective, used in logging and checkpoints persistence.
         Necessary, if you train with multiple objectives of the same type, otherwise they might override each other.
@@ -79,26 +98,34 @@ class Objective(abc.ABC):
         If the training fails (in the interactive - `-i` mode), the last, possibly error input can be retrieved
         from `this_objective.last_input`.
         """
-
+        self.routing_id = torch.tensor(id(self))
         self.batch_size = batch_size
         self.tokenizer = lang_module.tokenizer
-        self.given_id = objective_id
+        self.objective_id = objective_id
+        self.peft_objective = peft_objective
         self.loss_weight = loss_weight
+
         self.num_steps = 0
         self.remember_last_input = remember_last_input
         self.last_input = None
 
-        self.compatible_head_model = self.register_compatible_head_model(lang_module,
-                                                                         share_other_objective_head,
-                                                                         objective_args_for_head_config,
-                                                                         objective_module)
         self.epoch = 0
         self.dataset_length = {"train": 0, "eval": 0}
         self.loss_history = {"train": [], "eval": []}  # loss is treated differently than other outputs
         self.evaluators = {"train": [], "eval": []}
         self.evaluations_history = {"train": {}, "eval": {}}
         self.max_samples_per_log = {"train": max_samples_per_log, "eval": max_samples_per_eval_log}
-
+        self.data_iteration_offset = 0
+        self.prefetch_in_parallel_thread = prefetch_in_parallel_thread
+        # register_compatible_head_model also sets the dataset iterator in continued training
+        self.compatible_head_model = self.register_compatible_head_model(lang_module,
+                                                                         share_other_objective_head,
+                                                                         objective_args_for_head_config,
+                                                                         objective_module,
+                                                                         merge_objective_module)
+        self.save_objective_module = save_objective_module
+        if data_iteration_offset:  # can override obtained trainer_state["global_step"] in continued training
+            self.data_iteration_offset = data_iteration_offset
         self.progressbar = {}
 
         self.texts = None
@@ -107,12 +134,15 @@ class Objective(abc.ABC):
         self.val_texts_path = None
 
         if isinstance(texts_or_path, str):
+            self._check_supported_data_source_format(texts_or_path)
             self.texts_path = texts_or_path
-            with open(self.texts_path) as f:
-                self.dataset_length["train"] = len(f.readlines())
         else:
             self.texts = texts_or_path
-            self.dataset_length["train"] = len(self.texts)
+
+        if train_dataset_length is None:
+            self.dataset_length["train"] = self._compute_data_source_length(texts_or_path)
+        else:
+            self.dataset_length["train"] = train_dataset_length
 
         for split, given_evaluators in zip(("train", "eval"), (train_evaluators, val_evaluators)):
             for given_evaluator in given_evaluators:
@@ -126,12 +156,47 @@ class Objective(abc.ABC):
 
         if val_texts_or_path is not None:
             if isinstance(val_texts_or_path, str):
+                self._check_supported_data_source_format(val_texts_or_path)
                 self.val_texts_path = val_texts_or_path
-                with open(self.val_texts_path) as f:
-                    self.dataset_length["eval"] = len(f.readlines())
             else:
                 self.val_texts = val_texts_or_path
-                self.dataset_length["eval"] = len(self.val_texts)
+
+            if val_dataset_length is None:
+                self.dataset_length["eval"] = self._compute_data_source_length(val_texts_or_path)
+            else:
+                self.dataset_length["eval"] = val_dataset_length
+
+    def _check_supported_data_source_format(self, path: str) -> None:
+        if not os.path.exists(path):
+            raise FileNotFoundError("Objective %s: Given path '%s' does not exist" % (self, path))
+
+        # when the passed data source is a file, we check that it is in a supported format:
+        # we support .txt and .tar.gz files
+        supported_file_formats = ['.txt', '.gz']
+
+        if not any(path.endswith(suffix) for suffix in supported_file_formats):
+            logger.warning("Objective %s's given {val_}texts_or_path `%s` is not a List "
+                           "and does not end with one of supported suffixes: ['.txt', '.gz']."
+                           "We'll assume that the file is a line-separated plaintext file." % (self, path))
+
+    def _compute_data_source_length(self, texts_or_path: Union[str, List[str]]) -> int:
+        if isinstance(texts_or_path, str):
+
+            if texts_or_path.endswith('.gz'):
+                import io
+                import gzip
+                with io.TextIOWrapper(io.BufferedReader(gzip.open(texts_or_path))) as f:  # type: ignore
+                    return sum(1 for _ in f)  # more efficient line count
+            else:
+                with open(texts_or_path, "rb") as f:
+                    return sum(1 for _ in f)  # more efficient line count
+
+        elif isinstance(texts_or_path, list):
+            return len(texts_or_path)
+        else:
+            raise ValueError("Objective %s's data format (%s) is not supported. "
+                             "Please pass in a List[str], or str denoting a path to a file."
+                             % (self, type(texts_or_path)))
 
     def per_objective_log(self, split: str) -> Dict[str, float]:
         """
@@ -140,6 +205,9 @@ class Objective(abc.ABC):
         :return: Dict of the format {split + objective_name + evaluator_name: evaluator_value}
         """
         out_logs = {}
+        if split == "eval" and self.val_texts is None and self.val_texts_path is None:
+            logger.warning("Skipping evaluation for %s" % self)
+            return out_logs
         # aggregate per-progress_bar-steps, or per-evaluation-steps, keep the results of unprocessed evaluations
         loss_history = self.loss_history[split][-self.max_samples_per_log[split]:]
         mean_loss = sum(loss_history) / len(loss_history) if len(loss_history) else float("inf")
@@ -150,7 +218,6 @@ class Objective(abc.ABC):
 
         for evaluator in self.evaluators[split]:
             dataset = self.get_dataset(split, 0, self.compatible_head_model.device,
-                                       firstn=self.max_samples_per_log[split],
                                        add_oid=False,
                                        is_training_dataset=False)
             # evaluator should already return an aggregated value, so unlike loss, we don't average it
@@ -241,6 +308,7 @@ class Objective(abc.ABC):
         self.num_steps += 1
 
         if self.progressbar[split] is not None:
+            self.progressbar[split].update(1)
             self.progressbar[split].set_postfix(refresh=False, split=split, loss=loss.item(), epoch=self.epoch)
 
         return loss * self.loss_weight
@@ -260,20 +328,20 @@ class Objective(abc.ABC):
 
     def get_dataset(self,
                     split: str,
-                    objective_i: int,
-                    device: Union[str, torch.device],
-                    firstn: Optional[int] = None,
+                    objective_i: Optional[int] = 0,
+                    device: Optional[Union[str, torch.device]] = None,
                     add_oid: bool = True,
                     is_training_dataset: bool = True,
                     show_progressbar: bool = True) -> TransformerAdaptationDataset:
         """
         Default logic for wrapping the inputs iterator into torch.IterableDataset, used in Trainer.train_dataloaer.
         :param split: A split of the retrieved dataset. `train` or `eval`.
-        :param objective_i: Rank of this objective in schedule. Used only to properly set up progress bar.
+        :param objective_i: Objective's rank used only to properly set up parallel progress bars.
         :param device: Device to transfer this data set to.
-        :param firstn: If given, a number of the retrieved items from the dataset.
         :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
         :param is_training_dataset: Whether this dataset is used for training -> if to update the epochs counter.
+                                    Note that training dataset can also be iterated outside main training loop.
+        :param show_progressbar: Whether to maintain a dataset iterator progress bar for this objective.
 
         :return: TransformerAdaptationDataset wrapping a data set of this objective.
         """
@@ -282,25 +350,16 @@ class Objective(abc.ABC):
             # - get_dataset is also called from self.per_objective_log, or specific objectives
             self.epoch += 1 if split == "train" else 0
 
-        if show_progressbar:
-            self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
-                                             desc=str(self),
-                                             unit="batches",
-                                             position=objective_i,
-                                             leave=True)
-            self.progressbar[split].set_postfix(refresh=False, split=split, epoch=self.epoch, loss=-1)
-        else:
-            # we do not update loss, if no progress bar is pertained
-            self.progressbar[split] = None
-
         inputs_iter = self._get_inputs_iterator(split)
 
-        def _sample_to_device(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-            return {k: v.to(device) if k != "oid" else v for k, v in sample.items()}
-
-        def _add_oid(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
-            sample["oid"] = torch.tensor(id(self))
-            return sample
+        def _sample_to_device(chosen_device: Optional[Union[str, torch.device]],
+                              sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.Tensor]:
+            if chosen_device is None:
+                # default device is a device of the model assigned to this objective, if it is set
+                # if it is not, we resort to "cpu"
+                # in classic training, the model is always assigned when the dataset is requested
+                chosen_device = self.compatible_head_model.device if self.compatible_head_model is not None else "cpu"
+            return {k: v.to(chosen_device) for k, v in sample.items()}
 
         def _remember_input(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
             self.last_input = sample
@@ -310,21 +369,51 @@ class Objective(abc.ABC):
             self.progressbar[split].update(1)
             return sample
 
-        device_inputs_iter = map(_sample_to_device, inputs_iter)
+        def _add_oid(sample: Union[BatchEncoding, Dict[str, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
+            sample["oid"] = self.routing_id
+            return sample
+
+        device_inputs_iter = map(partial(_sample_to_device, device), inputs_iter)
+
+        if split == "eval" and self.max_samples_per_log["eval"] is not None:
+            device_inputs_iter = itertools.islice(device_inputs_iter, self.max_samples_per_log["eval"])
+            self.dataset_length["eval"] = self.max_samples_per_log["eval"] * self.batch_size
 
         if add_oid:
             device_inputs_iter = map(_add_oid, device_inputs_iter)
 
-        if firstn is not None and firstn < self.dataset_length[split]:
-            device_inputs_iter = itertools.islice(device_inputs_iter, firstn)
-
         if self.remember_last_input:
             device_inputs_iter = map(_remember_input, device_inputs_iter)
 
-        if show_progressbar:
-            device_inputs_iter = map(_update_pbar, device_inputs_iter)
+        if self.prefetch_in_parallel_thread:
+            from prefetch_generator import BackgroundGenerator
+            device_inputs_iter = BackgroundGenerator(device_inputs_iter, max_prefetch=self.num_samples_to_prefetch)
 
-        return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split])
+        # Support for continued training:
+        # if nonempty dataset AND this is a first train iteration, fast-forward data iteration to the self.offset_steps
+        should_offset_dataset = self.dataset_length[split] and (split == "train" and self.epoch == 1)
+        dataset_samples_offset = self.data_iteration_offset % self.dataset_length[split] if should_offset_dataset else 0
+        # adjust the current epoch accordingly
+        offset_epoch = (self.data_iteration_offset // self.dataset_length[split])
+        if offset_epoch:
+            self.epoch = offset_epoch + 1
+        # do not apply the offset again in the next epochs
+        self.data_iteration_offset = 0
+
+        if show_progressbar:
+            # set up a new progressbar object
+            self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
+                                             initial=dataset_samples_offset,
+                                             desc=str(self),
+                                             unit="batches",
+                                             position=objective_i,
+                                             leave=True)
+            self.progressbar[split].set_postfix(refresh=False, split=split, epoch=self.epoch, loss=-1)
+        else:
+            # we do not update loss, if no progress bar is pertained
+            self.progressbar[split] = None
+
+        return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split], dataset_samples_offset)
 
     def compute_loss_on_last_sample(self) -> torch.FloatTensor:
         """
@@ -394,7 +483,8 @@ class Objective(abc.ABC):
                                        lang_module: LangModule,
                                        other_objective: Optional["Objective"] = None,
                                        objective_args_for_head_config: Optional[Dict[str, Any]] = None,
-                                       preloaded_module: Optional[torch.nn.Module] = None) -> torch.nn.Module:
+                                       preloaded_module: Optional[torch.nn.Module] = None,
+                                       do_merge: bool = True) -> torch.nn.Module:
         """
         Resolves a model of this objective in given lang_module. Either requests LangModule to provide model with
         self.compatible_head, or asks to register custom model (if `preloaded_module` is given).
@@ -410,20 +500,50 @@ class Objective(abc.ABC):
         """
         head_config = objective_args_for_head_config if objective_args_for_head_config is not None else {}
 
+        if (self.peft_objective and "peft_config" not in head_config) or \
+                (not self.peft_objective and "peft_config" in head_config):
+            raise ValueError("When loading an objective with a PEFT module, you must both set the `peft_objective=True`"
+                             " *and* provide a `peft_config` in objective_args_for_head_config argument.")
+
+        # Support for continued training:
+        checkpoint_dir = None
+        possible_checkpoint_path = os.path.join(lang_module.model_name_or_path, str(self))
         if other_objective is not None:
             logger.warning("Objective %s will use %s head of %s objective",
                            self, self.compatible_head.name, other_objective)
             preloaded_module = other_objective.compatible_head_model
+        elif preloaded_module is not None:
+            logger.warning("Objective %s will use the pre-defined model given in `objective_module` parameter.", self)
+        elif os.path.exists(possible_checkpoint_path):
+            logger.warning("Reloading objective %s's module from checkpoint %s", str(self), possible_checkpoint_path)
+            checkpoint_dir = possible_checkpoint_path
 
-        return lang_module.load_training_head(self.compatible_head, str(id(self)), head_config, preloaded_module)
+            # if this is a checkpoint path (not a saved lang_module), adjust data iterator according to trainer_state
+            trainer_state_path = os.path.join(lang_module.model_name_or_path, "trainer_state.json")
+            if os.path.exists(trainer_state_path):
+                from transformers import TrainerState
+                trainer_state = TrainerState.load_from_json(trainer_state_path)
+                logger.warning("Data iteration of %s will continue on a step %s.", self, trainer_state.global_step)
+                self.data_iteration_offset = trainer_state.global_step
+        else:
+            logger.warning("No checkpoint found on %s. Attempting to load a model from '%s'.",
+                           possible_checkpoint_path, lang_module.model_name_or_path)
+
+        return lang_module.load_training_head(self.compatible_head,
+                                              self.peft_objective,
+                                              str(id(self)),
+                                              checkpoint_dir,
+                                              head_config,
+                                              preloaded_module,
+                                              do_merge)
 
     def __str__(self) -> str:
         """
         Default pretty print of this objective. Identification used also in the logs.
         :return: string identifier of this objective.
         """
-        if self.given_id:
-            return str("%s-%s" % (self.given_id, self.__class__.__name__))
+        if self.objective_id:
+            return str("%s-%s" % (self.objective_id, self.__class__.__name__))
         else:
             return self.__class__.__name__
 
@@ -467,24 +587,29 @@ class SupervisedObjective(Objective, abc.ABC):
                  **kwargs):
 
         if isinstance(labels_or_path, str):
+            # data source is a file: we support .txt and .tar.gz files
+            self._check_supported_data_source_format(labels_or_path)
             self.labels_path = labels_or_path
         else:
             self.labels = labels_or_path
 
         if val_labels_or_path is not None:
             if isinstance(val_labels_or_path, str):
+                self._check_supported_data_source_format(val_labels_or_path)
                 self.val_labels_path = val_labels_or_path
             else:
                 self.val_labels = val_labels_or_path
 
         if text_pair_or_path is not None:
             if isinstance(text_pair_or_path, str):
+                self._check_supported_data_source_format(text_pair_or_path)
                 self.text_pair_path = text_pair_or_path
             else:
                 self.text_pair = text_pair_or_path
 
         if val_text_pair_or_path is not None:
             if isinstance(val_text_pair_or_path, str):
+                self._check_supported_data_source_format(val_text_pair_or_path)
                 self.val_text_pair_path = val_text_pair_or_path
             else:
                 self.val_text_pair = val_text_pair_or_path
@@ -495,7 +620,8 @@ class SupervisedObjective(Objective, abc.ABC):
     def register_compatible_head_model(self, lang_module: LangModule,
                                        other_objective: Optional["Objective"] = None,
                                        objective_args_for_head_config: Optional[Dict[str, Any]] = None,
-                                       preloaded_module: Optional[torch.nn.Module] = None) -> torch.nn.Module:
+                                       preloaded_module: Optional[torch.nn.Module] = None,
+                                       merge_objective_module: bool = True) -> torch.nn.Module:
         """
         Additionally adds labels into a configuration of this objective's model in lang_module.
         Refer further to the documentation of the superclass.
@@ -521,8 +647,8 @@ class SupervisedObjective(Objective, abc.ABC):
                                               "id2label": {v: k for k, v in self.labels_map.items()},
                                               **objective_args_for_head_config}
 
-        return super().register_compatible_head_model(lang_module, other_objective,
-                                                      objective_args_for_head_config, preloaded_module)
+        return super().register_compatible_head_model(lang_module, other_objective, objective_args_for_head_config,
+                                                      preloaded_module, merge_objective_module)
 
     def _get_inputs_iterator(self, split: str) -> Iterator[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
         """
