@@ -1,0 +1,7 @@
+twine==5.0.0
+setuptools==75.3.0
+wheel==0.45.1
+pip==24.0
+pytest==6.2.5
+mypy==0.931
+pytype==2023.2.17
