@@ -1,7 +1,7 @@
 import abc
 import logging
 from enum import Enum
-from typing import Dict, Iterable, Iterator, Optional
+from typing import Dict, Iterable, Iterator, Optional, Callable, Any
 import os
 
 import torch
@@ -63,7 +63,7 @@ class AdaptationDataset(IterableDataset, abc.ABC):
     United dataset for both sequence and token training, and both supervised and unsupervised objectives.
     """
 
-    def __init__(self, length: Optional[int] = None):
+    def __init__(self, length: int = None):
         self.world_size = int(os.environ.get("WORLD_SIZE", 1))
         if self.world_size > 1:
             logger.warning("World size for data sampling: %s" % self.world_size)
@@ -98,16 +98,26 @@ class AdaptationDataset(IterableDataset, abc.ABC):
 
 
 class TransformerAdaptationDataset(AdaptationDataset):
+
     def __init__(self,
-                 batch_encoding_params: Iterable[Dict[str, torch.LongTensor]],
-                 length: Optional[int] = None,
-                 offset: int = 0):
+                 iterator_init_fn: Callable,
+                 # batch_encoding_params: Iterable[Dict[str, torch.LongTensor]],
+                 length: int = None,
+                 offset: int = 0,
+                 **iterator_init_kwargs):
         """
-        :param batch_encoding_params: Arguments to be passed to BatchEncoding (input_ids, attention_mask, labels)
+        TODO: docs
+        :param
         """
+        # TODO: TypeError: cannot pickle 'generator' object
+        #  We checked that this can be solved by avoiding iterator_init_fn of an initialized object (self.*)
         super().__init__(length)
-        self.batch_encoding_params = batch_encoding_params
+        self.iterator_init_fn: Callable[[*Any], Iterable[BatchEncoding]] = iterator_init_fn
+        self.iterator_init_kwargs: Dict[str, Any] = iterator_init_kwargs
+        # self.batch_encoding_params = batch_encoding_params
         self.offset = offset
+
+        # self.single_sample = next(iter(self.objective.construct_dataset_iter(self.split)))
 
     def __iter__(self) -> Iterator[Dict[str, torch.LongTensor]]:
         """
@@ -117,7 +127,7 @@ class TransformerAdaptationDataset(AdaptationDataset):
         """
         worker_info = torch.utils.data.get_worker_info()
 
-        for i, encoded_sample in enumerate(self.batch_encoding_params):
+        for i, encoded_sample in enumerate(self.iterator_init_fn(**self.iterator_init_kwargs)):
             # fast-forward the self.offset steps in continued training
             if i < self.offset:
                 continue

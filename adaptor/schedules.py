@@ -257,8 +257,13 @@ class Schedule(abc.ABC):
         length_combined = int(sum((o.dataset_length[split] // o.batch_size) for o in self.objectives[split].values()))
         if split == "train":
             length_combined *= int(self.args.num_train_epochs)
+        # TODO: reminder: initializing combined dataset is now not possible without passing the initialized iterator
+        debug_objective = list(self.objectives[split].values())[0]
 
-        return TransformerAdaptationDataset(self._combine_datasets(split), length_combined)
+        return TransformerAdaptationDataset(debug_objective.get_sample,
+                                            length_combined,
+                                            lengths=debug_objective.dataset_length[split],
+                                            split=split)
 
 
 class SequentialSchedule(Schedule):

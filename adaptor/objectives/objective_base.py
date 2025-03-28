@@ -326,25 +326,13 @@ class Objective(abc.ABC):
         """
         pass
 
-    def get_dataset(self,
-                    split: str,
-                    objective_i: Optional[int] = 0,
-                    device: Optional[Union[str, torch.device]] = None,
-                    add_oid: bool = True,
-                    is_training_dataset: bool = True,
-                    show_progressbar: bool = True) -> TransformerAdaptationDataset:
-        """
-        Default logic for wrapping the inputs iterator into torch.IterableDataset, used in Trainer.train_dataloaer.
-        :param split: A split of the retrieved dataset. `train` or `eval`.
-        :param objective_i: Objective's rank used only to properly set up parallel progress bars.
-        :param device: Device to transfer this data set to.
-        :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
-        :param is_training_dataset: Whether this dataset is used for training -> if to update the epochs counter.
-                                    Note that training dataset can also be iterated outside main training loop.
-        :param show_progressbar: Whether to maintain a dataset iterator progress bar for this objective.
-
-        :return: TransformerAdaptationDataset wrapping a data set of this objective.
-        """
+    def construct_dataset_iter(self,
+                               split: str,
+                               objective_i: Optional[int] = 0,
+                               device: Optional[Union[str, torch.device]] = None,
+                               add_oid: bool = True,
+                               is_training_dataset: bool = True,
+                               progressbar: bool = True) -> Iterator[Union[BatchEncoding, Dict[str, torch.Tensor]]]:
         if split == "train" and is_training_dataset:
             # increment epoch only for train split and only for the dataset used as training
             # - get_dataset is also called from self.per_objective_log, or specific objectives
@@ -400,7 +388,7 @@ class Objective(abc.ABC):
         # do not apply the offset again in the next epochs
         self.data_iteration_offset = 0
 
-        if show_progressbar:
+        if progressbar:
             # set up a new progressbar object
             self.progressbar[split] = trange(self.dataset_length[split] // self.batch_size,
                                              initial=dataset_samples_offset,
@@ -413,7 +401,39 @@ class Objective(abc.ABC):
             # we do not update loss, if no progress bar is pertained
             self.progressbar[split] = None
 
-        return TransformerAdaptationDataset(device_inputs_iter, self.dataset_length[split], dataset_samples_offset)
+        return device_inputs_iter
+
+    @staticmethod
+    def get_sample(lengths: int, **kwargs):
+        for _ in range(lengths):
+            yield {'input_ids': torch.tensor([[256047, 100181, 2]]), 'attention_mask': torch.tensor([[1, 1, 1]])}
+
+    def get_dataset(self,
+                    split: str,
+                    objective_i: Optional[int] = 0,
+                    device: Optional[Union[str, torch.device]] = None,
+                    add_oid: bool = True,
+                    is_training_dataset: bool = True,
+                    show_progressbar: bool = True) -> TransformerAdaptationDataset:
+        """
+        Default logic for wrapping the inputs iterator into torch.IterableDataset, used in Trainer.train_dataloaer.
+        :param split: A split of the retrieved dataset. `train` or `eval`.
+        :param objective_i: Objective's rank used only to properly set up parallel progress bars.
+        :param device: Device to transfer this data set to.
+        :param add_oid: Whether to append objective id to the match. Required for forward pass over LangModule.
+        :param is_training_dataset: Whether this dataset is used for training -> if to update the epochs counter.
+                                    Note that training dataset can also be iterated outside main training loop.
+        :param show_progressbar: Whether to maintain a dataset iterator progress bar for this objective.
+
+        :return: TransformerAdaptationDataset wrapping a data set of this objective.
+        """
+        # TODO: clean this up after the PoC
+
+        return TransformerAdaptationDataset(get_sample,
+                                            self.dataset_length[split],
+                                            lengths=self.dataset_length[split],
+                                            split=split, objective_i=objective_i, device=device, add_oid=add_oid,
+                                            is_training_dataset=is_training_dataset, progressbar=show_progressbar)
 
     def compute_loss_on_last_sample(self) -> torch.FloatTensor:
         """
@@ -464,9 +484,9 @@ class Objective(abc.ABC):
         return sources_iter
 
     @abc.abstractmethod
-    def _per_split_iterators(self, split: str) -> Union[Tuple[Iterable[str], ],
-                                                        Tuple[Iterable[str], Iterable[str]],
-                                                        Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
+    def _per_split_iterators(self, split: str) -> Union[Tuple[Iterable[str],],
+    Tuple[Iterable[str], Iterable[str]],
+    Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
         """
         Implementations of shared (un/)supervised iterations in (Un/)SupervisedObjective.
         Not meant to be overriden when implementing custom data set.
@@ -687,7 +707,7 @@ class SupervisedObjective(Objective, abc.ABC):
             yield collator(batch_features)
 
     def _per_split_iterators(self, split: str) -> Union[Tuple[Iterable[str], Iterable[str]],
-                                                        Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
+    Tuple[Iterable[str], Iterable[str], Iterable[str]]]:
         """
         Default inputs iterator for supervised objectives. Returns a pair of iterators, over input texts and labels.
         Not meant to be overriden when implementing custom data set. Instead choose to inherit either
